@@ -1,6 +1,5 @@
 import type { ID, Service } from "../../shared/types";
-import { api, type AiInput } from "../api/client";
-import { aiExamples } from "../api/mock-ai";
+import { api, isConflict, isOutcomeUnknown, type AiInput } from "../api/client";
 import { errorNotice, mutation } from "../ui/async";
 import { aiNote, hint, page, pageBody, pageTitle, primaryButton, secondaryButton } from "../ui/components";
 import { field, textArea } from "../ui/fields";
@@ -15,11 +14,14 @@ type AiScreenOptions<T> = {
   preset?: Service;
   submit: (input: AiInput, serviceId?: ID) => Promise<T>;
   onSaved: (result: T) => void;
+  onReview?: () => Promise<void> | void;
 };
 
 export function aiInputScreen<T>(options: AiScreenOptions<T>) {
   const save = mutation();
-  const example = aiExamples[options.entity];
+  const review = mutation();
+  const needsReview = signal(false);
+  const example = api.demoExamples?.[options.entity];
   const text = textArea("ai-text", options.entity === "changes" ? "Опишите новые пожелания" : "Введите описание", "");
   const picker = options.entity === "order" ? servicePicker(options.preset ?? null) : null;
   const screenshots = signal<File[]>([]);
@@ -94,29 +96,40 @@ export function aiInputScreen<T>(options: AiScreenOptions<T>) {
   ).style({ gap: space.sm });
 
   function submit() {
-    if (picking.value || recording.value || starting.value) return;
+    if (picking.value || recording.value || starting.value || review.pending.value) return;
+    if (needsReview.value && options.onReview) {
+      void review.run(async () => options.onReview?.(), () => { needsReview.value = false; });
+      return;
+    }
     inputError.value = "";
     const input = { text: text.value, files: screenshots.value };
     const serviceId = picker?.selected.value?.id ?? undefined;
-    void save.run(() => options.submit(input, serviceId), options.onSaved);
+    void save.run(() => options.submit(input, serviceId), options.onSaved, (error) => {
+      needsReview.value = Boolean(options.onReview) && (isConflict(error) || isOutcomeUnknown(error));
+    });
   }
 
   const screen = page(options.entity === "changes" ? "change-input" : `import-${options.entity}-${options.mode}`, pageBody(
     pageTitle(options.title),
-    api.demo && aiNote("Демонстрационный режим", options.mode === "voice"
+    api.demo ? aiNote("Демонстрационный режим", options.mode === "voice"
       ? "Текст обрабатывается локально. Микрофон использует распознавание вашего устройства или браузера."
       : options.mode === "screenshots"
         ? "Для скриншотов используются готовые примеры. Выбранные изображения остаются на устройстве."
-        : "Текст обрабатывается локально. Перечислите пожелания с новой строки."),
+        : "Текст обрабатывается локально. Перечислите пожелания с новой строки.")
+      : aiNote("Перед отправкой в AI", "Уберите из переписки личные данные и лишние фрагменты. Текст и скриншоты будут переданы для обработки AI."),
     picker && UIColumn(UIText("Услуга · необязательно").style(type.label), picker.control).style({ gap: space.sm }),
     voiceInput,
     fileInput,
     field(options.mode === "screenshots" ? "Текст к скриншотам · необязательно" : "Текст", text),
-    api.demo && secondaryButton("Заполнить пример", "ai-example", () => { if (!recording.value && !starting.value && !save.pending.value) text.value = example; }),
+    example ? secondaryButton("Заполнить пример", "ai-example", () => { if (!recording.value && !starting.value && !save.pending.value) text.value = example; }) : null,
   ), {
-    feedback: errorNotice(() => inputError.value || save.error.value),
-    onBack: () => { if (!save.pending.value) Router.pop(); },
-    action: primaryButton(() => save.pending.value ? "Сохраняем…" : options.button, "submit-ai", submit, assetIcon("lucide:sparkles")),
+    feedback: errorNotice(() => inputError.value || review.error.value || save.error.value),
+    onBack: () => { if (!save.pending.value && !review.pending.value) Router.pop(); },
+    action: primaryButton(() => {
+      if (save.pending.value) return api.demo ? "Обрабатываем…" : "Обрабатываем с AI…";
+      if (review.pending.value) return "Обновляем данные…";
+      return needsReview.value ? "Проверить данные" : options.button;
+    }, "submit-ai", submit, assetIcon("lucide:sparkles")),
   });
 
   if (picker) screen.widgets(picker.modal);

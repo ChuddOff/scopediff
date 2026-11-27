@@ -3,35 +3,56 @@
 A LeCodes app. The whole SDK is available as globals (`UIScreen`, `UIText`, `Scene2D`, …) —
 no imports needed. `main.ts` is the entry point.
 
-## Run it
+## Режимы запуска
 
-```
-lecodes dev                  # live on your phone: scan the QR with the LeCodes app, hot reload
-lecodes compile -o app.js    # bundle to a single self-contained JS file
-```
+Основной вход `main.ts` использует HTTP-клиент для FastAPI. После деплоя укажите согласованный HTTPS URL с путём `/api/v1` в `api/config.ts`. Запуск без адреса покажет сообщение о настройке сервера. Токен анонимной сессии хранится через `secureStorage`. В браузерном предпросмотре LeCodes реализует этот SDK API через локальное хранилище своего хоста.
 
-## Test it (no device needed)
-
-```
-lecodes render --png shot.png    # headless screenshot of the running app
-lecodes test                     # run tests/*.flow.json — the starter ships with a passing one
+```sh
+lecodes dev --web                        # FastAPI, как в конкурсной сборке
+lecodes compile -o .lecodes/scopediff.js  # основная сборка без mock API
+lecodes dev --web --entry dev-mock.ts     # отдельный вход с локальными демоданными
 ```
 
-Scenario format + conventions: see [CLAUDE.md](./CLAUDE.md) (written for AI assistants, useful
-for humans too).
+Для браузерного предпросмотра FastAPI должен разрешать CORS для origin предпросмотра, включая заголовки `Authorization` и `Content-Type`. Интерактивную ссылку возвращает `publish`. Для открытия PDF в браузере потребуется согласованный источник временной подписанной ссылки. В v1 уже описано авторизованное получение PDF как файла, доступное через `getVersionPdf`.
 
-## Put it on the platform
+## Проверки без телефона
 
-This project is local-only. To give it a home on le.codes (web editor, sharing, OTA updates):
-
-```
-lecodes login                    # once per machine
-lecodes link                     # create a project from this folder and connect it
-lecodes push -m "initial"        # upload it as the first checkpoint (--publish to go live)
+```sh
+lecodes test --entry dev-mock.ts
+lecodes test --entry tests/http-client.ts --dir tests/http
+npx --yes --package typescript@5.9.3 tsc --noEmit --strict
 ```
 
-Already made the project in the web editor? `lecodes link --project <uuid>` adopts it — it
-shows what your next push would change there before connecting anything.
+Для проверки фактического HTTP и multipart запустите `node tests/http-wire/server.cjs` в отдельном терминале, затем выполните:
+
+```sh
+lecodes test --entry tests/http-wire.ts --dir tests/http-wire --wait-network --settle 100
+```
+
+Тестовый сервер слушает только `127.0.0.1:49335` и использует тестовые данные. Параметр `--settle 100` позволяет проверить состояние загрузки до задержанного ответа сервера. Формат сценариев описан в [CLAUDE.md](./CLAUDE.md).
+
+## Подготовка конкурсного проекта LeCodes
+
+Из каталога `mobile/` соберите отдельный каталог с разрешёнными файлами. В него входят HTTP-вход, рабочие экраны и ресурсы шрифтов. Файлы mock, тесты и локальные конфигурации остаются в рабочей копии.
+
+```powershell
+node tools/stage-release.cjs
+Set-Location .lecodes/release
+lecodes compile -o .lecodes/scopediff.js
+```
+
+Из этого же каталога в CLI 2.14.8 привязать сборку к существующему проекту можно так:
+
+```powershell
+lecodes link --project "https://le.codes/app/projects/oegpwopq" --no-types
+lecodes status
+```
+
+Команда `link --project` требует аккаунт с правом редактирования. При первом запуске CLI может понадобиться `lecodes login`.
+
+Пока команда уточняет назначение `app.server.ts`, держите точную копию файла из того же снимка командного проекта в `.lecodes/release/app.server.ts`. Её можно взять из существующей локальной копии проекта или у коллеги. CLI считает отсутствующий файл удалённым, даже если он указан в `.lecodesignore`.
+
+После обновления исходников повторите `node tools/stage-release.cjs` из `mobile/`. Для привязанного каталога скрипт сверяет SHA-256 серверного файла с манифестом и сохраняет оба файла. Проверьте вывод `lecodes status` из `.lecodes/release`. При совпадении копии с манифестом `app.server.ts` не появится в списке изменений.
 
 ## Go native
 
@@ -43,8 +64,7 @@ lecodes app open             # open it in Xcode, build & run
 
 ## Layout
 
-- `main.ts` — the app's entry point. Add more .ts files freely and import them from
-  `main.ts`; a file named `main.ts` is always the entry.
+- `main.ts` — the HTTP entry point. `dev-mock.ts` is the explicit mock entry.
 - `tests/` — headless flow tests (`lecodes test`); failing steps dump the frame to
   `tests/.artifacts/`
 - `CLAUDE.md` — guidance for AI assistants (the headless feedback loop + testability conventions)

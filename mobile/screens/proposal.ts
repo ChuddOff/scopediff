@@ -1,5 +1,5 @@
 import type { ID, Proposal, ProposalVersion, ShareFormat } from "../../shared/types";
-import { api, isConflict } from "../api/client";
+import { api, isConflict, isOutcomeUnknown } from "../api/client";
 import { prepareExport } from "../proposals/export";
 import { isOpen } from "../proposals/model";
 import { errorNotice, mutation, resource } from "../ui/async";
@@ -10,7 +10,13 @@ import { proposalEditor } from "./proposal-editor";
 import { textExport, urlExport } from "./proposal-export";
 import { comparisonScreen, versionHistory } from "./proposal-history";
 
-type Confirm = "approve" | "reject";
+type Confirm = "approve" | "reject" | "revoke-link";
+
+const confirmationCopy = {
+  approve: { title: "Зафиксировать согласование?", body: "Эта версия будет добавлена к договорённостям заказа.", button: "Подтвердить согласование" },
+  reject: { title: "Отклонить предложение?", body: "Предложение закроется. Договорённости заказа сохранятся.", button: "Подтвердить отклонение" },
+  "revoke-link": { title: "Отозвать ссылку?", body: "Заказчик потеряет доступ по этой ссылке.", button: "Отозвать ссылку" },
+};
 
 export function proposalScreen(id: ID, versionId: ID | undefined, revise: (proposal: Proposal) => void, openVersion: (id: ID) => void) {
   const historyOnly = versionId !== undefined;
@@ -31,7 +37,7 @@ export function proposalScreen(id: ID, versionId: ID | undefined, revise: (propo
     return state.status === "ready" ? state.data : null;
   }
 
-  function reloadOnConflict(error: unknown) { if (isConflict(error)) void document.load(); }
+  function reloadAfterFailure(error: unknown) { if (isConflict(error) || isOutcomeUnknown(error)) void document.load(); }
 
   function dismiss(modal: UIModal) { if (!action.pending.value) modal.hide(); }
 
@@ -41,15 +47,14 @@ export function proposalScreen(id: ID, versionId: ID | undefined, revise: (propo
     void action.run(() => prepareExport(data.order, data.proposal, data.version, format), (result) => {
       exports.hide();
       Router.push(result.kind === "text" ? textExport(result.markdown, result.plain) : urlExport(result.url, format === "pdf"));
-    }, reloadOnConflict);
+    }, reloadAfterFailure);
   }
 
-  const serverLabel = (name: string) => api.demo ? `${name} · нужен сервер` : name;
   const exports = dialog(
     UIText("Поделиться предложением").style(type.card),
     errorNotice(action.error),
-    secondaryButton(serverLabel("Интерактивная ссылка"), "share-link", () => exportFormat("link")),
-    secondaryButton(serverLabel("PDF"), "share-pdf", () => exportFormat("pdf")),
+    secondaryButton(api.demo ? "Интерактивная ссылка · нужен сервер" : "Интерактивная ссылка", "share-link", () => exportFormat("link")),
+    secondaryButton(api.temporaryPdfUrl ? "PDF" : "PDF · недоступен", "share-pdf", () => exportFormat("pdf")),
     secondaryButton(() => action.pending.value ? "Готовим документ…" : "Markdown", "share-markdown", () => exportFormat("markdown")),
     secondaryButton("Закрыть", "close-share", () => dismiss(exports)),
   ).onDismiss(() => dismiss(exports));
@@ -65,20 +70,21 @@ export function proposalScreen(id: ID, versionId: ID | undefined, revise: (propo
   }
 
   const confirmation = dialog(
-    UIText(() => confirm.value?.kind === "approve" ? "Зафиксировать согласование?" : "Отклонить предложение?").style(type.card),
-    hint(() => confirm.value?.kind === "approve" ? "Эта версия будет добавлена к договорённостям заказа." : "Предложение закроется. Договорённости заказа сохранятся."),
+    UIText(() => confirm.value ? confirmationCopy[confirm.value.kind].title : "").style(type.card),
+    hint(() => confirm.value ? confirmationCopy[confirm.value.kind].body : ""),
     errorNotice(action.error),
-    secondaryButton(() => action.pending.value ? "Сохраняем…" : confirm.value?.kind === "approve" ? "Подтвердить согласование" : "Подтвердить отклонение",
+    secondaryButton(() => action.pending.value ? "Сохраняем…" : confirm.value ? confirmationCopy[confirm.value.kind].button : "",
       "confirm-proposal-action", () => {
         const operation = confirm.value;
         if (!operation || historyOnly || confirmationStale.value) return;
-        const update = operation.kind === "approve" ? api.approveProposal : api.rejectProposal;
+        const update = operation.kind === "approve" ? api.approveProposal : operation.kind === "reject" ? api.rejectProposal : api.revokeLink;
+        if (!update) return;
         void action.run(() => update(id, { expectedVersionId: operation.versionId }), () => {
           confirmation.hide();
           void document.load();
         }, (error) => {
-          confirmationStale.value = isConflict(error);
-          reloadOnConflict(error);
+          confirmationStale.value = isConflict(error) || isOutcomeUnknown(error);
+          reloadAfterFailure(error);
         });
       }).style({ display: () => confirmationStale.value ? "none" : "flex" }),
     secondaryButton("Отмена", "cancel-proposal-action", () => dismiss(confirmation)),
@@ -87,17 +93,8 @@ export function proposalScreen(id: ID, versionId: ID | undefined, revise: (propo
   function demoCounter(version: ProposalVersion) {
     const respond = api.respondToDemoCounter;
     if (!api.demo || !respond || historyOnly) return;
-    const items = version.items.map(({ id, title, description, price }, index) => ({
-      id, title, description, price: index === 0 && price !== null ? Math.floor(price * 0.9) : price,
-    }));
-    void action.run(() => respond(id, {
-      expectedVersionId: version.id,
-      content: {
-        items, deadline: version.deadline,
-        conditions: [version.conditions, "Демонстрационный ответ: согласовать макеты перед финальной передачей."].filter(Boolean).join("\n"),
-        comment: "Пример ответа заказчика",
-      },
-    }), () => { actions.hide(); void document.load(); }, reloadOnConflict);
+    void action.run(() => respond(id, { expectedVersionId: version.id }),
+      () => { actions.hide(); void document.load(); }, reloadAfterFailure);
   }
 
   const menuItems = UIColumn(() => {
@@ -106,6 +103,11 @@ export function proposalScreen(id: ID, versionId: ID | undefined, revise: (propo
     const { proposal, version } = data;
     const editable = isOpen(proposal.status);
     return [
+      secondaryButton(() => document.loading.value ? "Обновляем…" : "Обновить предложение", "refresh-proposal", async () => {
+        if (action.pending.value || document.loading.value) return;
+        await document.refresh();
+        actions.hide();
+      }),
       secondaryButton("История версий", "open-history", () => {
         if (action.pending.value) return;
         actions.hide();
@@ -120,10 +122,11 @@ export function proposalScreen(id: ID, versionId: ID | undefined, revise: (propo
         void action.run(() => api.publishProposal(id, { expectedVersionId: version.id, format: "text" }), () => {
           actions.hide();
           void document.load();
-        }, reloadOnConflict);
+        }, reloadAfterFailure);
       }) : null,
       proposal.status === "pending" || proposal.status === "countered" ? secondaryButton("Зафиксировать согласование", "approve-proposal", () => askConfirmation("approve")) : null,
       editable ? secondaryButton("Отклонить", "reject-proposal", () => askConfirmation("reject"), true) : null,
+      proposal.shareUrl && api.revokeLink ? secondaryButton("Отозвать ссылку", "revoke-proposal-link", () => askConfirmation("revoke-link"), true) : null,
       api.demo && api.respondToDemoCounter && proposal.status === "pending"
         ? secondaryButton("Демо: встречное предложение", "demo-counter", () => demoCounter(version)) : null,
     ];

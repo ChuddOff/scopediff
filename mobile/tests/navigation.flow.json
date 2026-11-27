@@ -2,6 +2,7 @@
   "name": "Вкладки, фильтры заказов и экраны ввода",
   "steps": [
     { "expect": { "node": "order-coffee-branding", "text": "3 в работе", "notNode": "order-social-templates" } },
+    { "scroll": "page-scroll", "by": 1500, "expect": { "node": "new-order" } },
     { "tap": "order-spring-materials", "expect": { "screen": "order-detail", "text": "Макеты для весеннего запуска" } },
     { "tap": "back", "expect": { "node": "filter-completed" } },
     { "tap": "filter-completed", "expect": { "node": "order-social-templates", "notNode": "order-coffee-branding", "text": "3 в работе" } },
@@ -9,6 +10,7 @@
     { "tap": "method-voice", "expect": { "screen": "import-order-voice", "node": "ai-text" } },
     { "tap": "back", "expect": { "node": "order-social-templates" } },
     { "tap": "tab-services", "expect": { "text": "Мои услуги", "node": "service-branding" } },
+    { "scroll": "page-scroll", "by": 1500, "expect": { "node": "new-service" } },
     { "tap": "service-social", "expect": { "screen": "service-detail", "text": "Передача редактируемых макетов" } },
     { "tap": "back", "expect": { "node": "import-services" } },
     { "tap": "import-services", "expect": { "screen": "create-service" } },
@@ -16,6 +18,7 @@
     { "tap": "back", "expect": { "node": "new-service" } },
     { "tap": "new-service", "expect": { "screen": "create-service" } },
     { "tap": "method-manual", "expect": { "screen": "service-form", "text": "Помогите AI понять вашу работу" } },
+    { "scroll": "page-scroll", "by": 1500, "expect": { "text": "Это поможет AI точнее анализировать пожелания заказчиков.", "node": "save-service" } },
     { "tap": "back", "expect": { "node": "new-service" } },
     { "tap": "tab-orders", "expect": { "node": "order-social-templates" } },
     { "tap": "filter-active", "expect": { "node": "order-coffee-branding", "notNode": "order-social-templates" } }

@@ -1,19 +1,29 @@
 import type { ID, Order, Proposal, ProposalVersion } from "../../shared/types";
-import { api } from "../api/client";
+import { api, isConflict, isOutcomeUnknown } from "../api/client";
 import { formatDate, isOpen, proposalStatus } from "../proposals/model";
 import { errorNotice, mutation, resource } from "../ui/async";
-import { arrow, card, cardStyle, dialog, emptyState, hint, icon, page, pageBody, pageTitle, primaryButton, secondaryButton } from "../ui/components";
+import { arrow, card, cardStyle, dialog, emptyState, hint, icon, page, pageBody, primaryButton, recordHeader, recordTitle, secondaryButton } from "../ui/components";
 import { deleteDialog } from "../ui/delete-dialog";
-import { colors, radius, space, type } from "../ui/theme";
+import { colors, space, type } from "../ui/theme";
 import { orderStatus } from "./orders";
+
+function orderNote(label: string, value: string, name: string) {
+  const expanded = signal(false);
+  const collapsible = value.length > 160 || value.split("\n").length > 4;
+  return UIColumn(
+    UIText(label).style(type.label),
+    hint(value || "Пока не указаны").style({ lineClamp: () => collapsible && !expanded.value ? 4 : 0 }),
+    collapsible ? secondaryButton(() => expanded.value ? "Свернуть" : "Показать полностью", name, () => {
+      expanded.value = !expanded.value;
+    }).style({ alignSelf: "flex-start" }) : null,
+  ).style({ gap: space.xs });
+}
 
 function about(order: Order) {
   return card(
     UIText("О заказе").style(type.card),
-    UIColumn(UIText("Договорённости").style(type.label), hint(order.agreements || "Пока не указаны"))
-      .style({ gap: space.xs }),
-    UIColumn(UIText("Выполненные работы").style(type.label), hint(order.completedWork || "Пока не указаны"))
-      .style({ gap: space.xs }),
+    orderNote("Договорённости", order.agreements, "toggle-agreements"),
+    orderNote("Выполненные работы", order.completedWork, "toggle-completed-work"),
     order.deadline ? UIRow(
       icon(assetIcon("lucide:calendar-days"), colors.accentInk, 16),
       UIText(`Срок · ${formatDate(order.deadline)}`).style(type.label),
@@ -54,10 +64,15 @@ export function orderDetail(id: ID, edit: (order: Order) => void, addChanges: (o
   });
 
   const statusChange = mutation();
-  const deletion = deleteDialog("Удалить заказ?", "Заказ и все его предложения будут удалены.", () => api.deleteOrder(id));
+  const deletion = deleteDialog("Удалить заказ?", "Заказ и все его предложения будут удалены.", () => api.deleteOrder(id), details.load);
   const actions = dialog(
     UIText("Действия с заказом").style(type.card),
     errorNotice(statusChange.error),
+    secondaryButton(() => details.loading.value ? "Обновляем…" : "Обновить заказ", "refresh-order", async () => {
+      if (statusChange.pending.value || details.loading.value) return;
+      await details.refresh();
+      actions.hide();
+    }),
     secondaryButton(() => {
       const state = details.state.value;
       if (statusChange.pending.value) return "Обновляем…";
@@ -66,7 +81,9 @@ export function orderDetail(id: ID, edit: (order: Order) => void, addChanges: (o
       const state = details.state.value;
       if (state.status !== "ready") return;
       const status = state.data.order.status === "active" ? "completed" : "active";
-      void statusChange.run(() => api.updateOrder(id, { status }), () => { actions.hide(); void details.load(); });
+      void statusChange.run(() => api.updateOrder(id, { status }), () => { actions.hide(); void details.load(); }, (error) => {
+        if (isConflict(error) || isOutcomeUnknown(error)) void details.load();
+      });
     }),
     secondaryButton("Удалить заказ", "delete-order", () => {
       if (statusChange.pending.value) return;
@@ -77,29 +94,25 @@ export function orderDetail(id: ID, edit: (order: Order) => void, addChanges: (o
   ).onDismiss(() => { if (!statusChange.pending.value) actions.hide(); });
 
   const content = details.view(({ order, documents }) => [
-    UIRow(
+    recordHeader(
       UIColumn(
-        pageTitle(order.title),
-        order.serviceSnapshot && hint(order.serviceSnapshot.name),
+        recordTitle(order.title, order.serviceSnapshot?.name),
         orderStatus(order.status),
-      ).style({ flex: 1, minWidth: 0, gap: space.sm }),
-      UIColumn(
-        UIButton(icon(assetIcon("lucide:pencil"), colors.accentInk, 18))
-          .style({ ...cardStyle, width: 44, height: 44, borderRadius: radius.control, $pressed: { backgroundColor: colors.ai } })
-          .named("edit-order").onClick(() => edit(order)),
-        UIButton(icon(assetIcon("lucide:ellipsis"), colors.text, 20))
-          .style({ width: 44, height: 44, borderRadius: radius.control, $pressed: { backgroundColor: colors.control } })
-          .named("order-menu").onClick(() => { statusChange.error.value = ""; actions.show(); }),
-      ).style({ gap: space.xs }),
-    ).style({ gap: space.md, alignItems: "flex-start" }),
+      ).style({ gap: space.sm }),
+      "order",
+      () => edit(order),
+      () => { statusChange.error.value = ""; actions.show(); },
+    ),
     about(order),
     approvedChanges(documents.flatMap(({ approved }) => approved ? [approved] : [])),
     UIColumn(
       UIText("Правки").style({ ...type.card, fontSize: 20, lineHeight: 26 }),
       documents.length === 0
-        ? emptyState("Правок пока нет", "Когда появятся новые пожелания, добавьте их к заказу.")
+        ? emptyState("Правок пока нет", order.status === "completed"
+          ? "В этом заказе не было правок."
+          : "Когда появятся новые пожелания, добавьте их к заказу.")
         : documents.map(({ proposal, current }) => UIButton(
-          UIColumn(UIText(proposal.title).style(type.card),
+          UIColumn(UIText(proposal.title).style({ ...type.card, lineClamp: 2 }),
             hint([proposalStatus[proposal.status], current && `Версия ${current.version}`].filter(Boolean).join(" · ")))
             .style({ flex: 1, minWidth: 0, gap: space.xs }),
           arrow(),
@@ -119,7 +132,7 @@ export function orderDetail(id: ID, edit: (order: Order) => void, addChanges: (o
       return state.status === "ready" && state.data.open ? "Добавить замечания" : "Добавить правки";
     }, "add-changes", () => {
       const state = details.state.value;
-      if (state.status === "ready") addChanges(state.data.order, state.data.open);
+      if (state.status === "ready" && state.data.order.status === "active") addChanges(state.data.order, state.data.open);
     }, assetIcon("lucide:plus")),
   });
   return details.bind(screen.widgets(actions, deletion.modal));

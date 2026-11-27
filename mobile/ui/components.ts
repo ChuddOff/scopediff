@@ -1,4 +1,5 @@
 import { colors, radius, space, type } from "./theme";
+import { bindKeyboardScroll } from "./form-focus";
 
 const contentWidth = 520;
 
@@ -27,6 +28,40 @@ export function pageTitle(title: string | (() => string)) {
   return UIText(title).style(type.page);
 }
 
+export function recordTitle(title: string, subtitle?: string) {
+  const heading = pageTitle(title);
+  const compactTitle = title.length > 90;
+  const compactSubtitle = (subtitle?.length ?? 0) > 60;
+  const expanded = signal(false);
+  if (title.length > 55) heading.style({ fontSize: 24, lineHeight: 31, letterSpacing: -0.5 });
+  if (compactTitle) heading.style({ lineClamp: () => expanded.value ? 0 : 4 });
+  const caption = subtitle ? hint(subtitle) : null;
+  if (compactSubtitle) caption?.style({ lineClamp: () => expanded.value ? 0 : 2 });
+  return UIColumn(
+    heading,
+    caption,
+    compactTitle || compactSubtitle ? secondaryButton(
+      () => expanded.value ? "Свернуть заголовок" : "Развернуть заголовок",
+      "toggle-record-title",
+      () => { expanded.value = !expanded.value; },
+    ).style({ alignSelf: "flex-start" }) : null,
+  ).style({ gap: space.sm });
+}
+
+export function recordHeader(heading: UINodeChild, record: "order" | "service", onEdit: () => void, onMenu: () => void) {
+  return UIRow(
+    UIColumn(heading).style({ flex: 1, minWidth: 0 }),
+    UIColumn(
+      UIButton(icon(assetIcon("lucide:pencil"), colors.accentInk, 18))
+        .style({ ...cardStyle, width: 44, height: 44, borderRadius: radius.control, $pressed: { backgroundColor: colors.ai } })
+        .named(`edit-${record}`).onClick(onEdit),
+      UIButton(icon(assetIcon("lucide:ellipsis"), colors.text, 20))
+        .style({ width: 44, height: 44, borderRadius: radius.control, $pressed: { backgroundColor: colors.control } })
+        .named(`${record}-menu`).onClick(onMenu),
+    ).style({ gap: space.xs }),
+  ).style({ gap: space.md, alignItems: "flex-start" });
+}
+
 export function card(...children: UINodeChild[]) {
   return UIColumn(children).style({ ...cardStyle, padding: space.lg, gap: space.xs });
 }
@@ -46,7 +81,7 @@ export function primaryButton(label: string | (() => string), name: string, onCl
 }
 
 export function secondaryButton(label: string | (() => string), name: string, onClick: () => void, danger = false) {
-  return UIButton(UIText(label).style({ ...type.button, color: danger ? colors.danger : colors.accentInk }))
+  return UIButton(UIText(label).style({ ...type.button, color: danger ? colors.danger : colors.accentInk, flexShrink: 1, minWidth: 0, textAlign: "center" }))
     .style({
       ...cardStyle, minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.control,
       $pressed: { backgroundColor: danger ? colors.dangerSurface : colors.ai },
@@ -155,5 +190,6 @@ export function page(name: string, body: UIScrollable, options: {
   const screen = UIScreen(header(options.onBack), body, footer)
     .style({ backgroundColor: colors.bg })
     .named(name);
+  bindKeyboardScroll(screen, body);
   return options.onBack ? screen.onBack(options.onBack) : screen;
 }

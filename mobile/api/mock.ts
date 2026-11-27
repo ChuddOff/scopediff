@@ -1,15 +1,15 @@
 import type {
   ApiError, ChangeItem, DateOnly, ID, Order, OrderInput, Proposal, ProposalContent, ProposalContentInput,
-  ProposalResult, ProposalVersion, Service, ServiceInput,
+  ProposalResult, ProposalVersion, PublicCounterContent, Service, ServiceInput,
 } from "../../shared/types";
 import { demoOrders, demoServices } from "../demo-data";
+import { validateAiInput } from "./ai-input";
 import type { AiInput, ApiClient } from "./client";
 import { aiExamples, exampleChanges, exampleOrder, exampleServices } from "./mock-ai";
 import { isOpen, priceSummary } from "../proposals/model";
 
 type State = { services: Service[]; orders: Order[]; proposals: Proposal[]; versions: ProposalVersion[] };
 const storageKey = "scope.diff.mock.v1";
-const maxFileSize = 5 * 1024 * 1024;
 
 class MockError extends Error implements ApiError {
   readonly error: ApiError["error"];
@@ -109,19 +109,7 @@ function insertOrder(state: State, input: OrderInput): Order {
   return order;
 }
 
-function aiText(input: AiInput) {
-  const text = input.text?.trim() ?? "";
-  const files = input.files ?? [];
-  if (!text && !files.length) throw new MockError(400, "BAD_INPUT", "Добавьте текст или хотя бы один скриншот.");
-  if (files.length > 3 || files.some((file) => file.size > maxFileSize)) {
-    throw new MockError(413, "FILE_TOO_LARGE", "Можно добавить до трёх скриншотов, каждый до 5 МБ.");
-  }
-  // The client SDK exposes the name and size. The future HTTP server must inspect the bytes.
-  if (files.some((file) => !/\.(png|jpe?g|webp)$/i.test(file.name) || file.size <= 0)) {
-    throw new MockError(400, "BAD_INPUT", "Выберите изображения в формате PNG, JPEG или WebP.");
-  }
-  return text;
-}
+function aiText(input: AiInput) { return validateAiInput(input).text; }
 
 function proposalContent(input: ProposalContentInput, previous?: ProposalVersion): ProposalContent {
   if (!input.items.length) throw new MockError(422, "VALIDATION_ERROR", "Добавьте хотя бы одну работу в предложение.");
@@ -200,6 +188,7 @@ function makeDraft(state: State, order: Order, changes: string, previous?: Propo
 
 export const mockApi: ApiClient = {
   demo: true,
+  demoExamples: aiExamples,
   async listServices() {
     return [...readState().services].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   },
@@ -358,12 +347,16 @@ export const mockApi: ApiClient = {
       if (proposal.status !== "pending" || proposal.publishedVersionId !== version.id) {
         throw new MockError(409, "INVALID_STATE", "Ответ возможен для актуального предложения на согласовании.");
       }
-      const items = input.content.items.map((item) => {
-        const known = version.items.find((entry) => entry.id === item.id);
-        const unchanged = known && known.title === item.title.trim() && known.description === item.description.trim();
-        return { ...item, category: unchanged ? known.category : "unclear" as const, reason: unchanged ? known.reason : "" };
-      });
-      const content = proposalContent({ ...input.content, title: version.title, items }, version);
+      const answer: PublicCounterContent = {
+        items: version.items.map(({ id, title, description, price }, index) => ({
+          id, title, description, price: index === 0 && price !== null ? Math.floor(price * 0.9) : price,
+        })),
+        deadline: version.deadline,
+        conditions: [version.conditions, "Демонстрационный ответ: согласовать макеты перед финальной передачей."].filter(Boolean).join("\n"),
+        comment: "Пример ответа заказчика",
+      };
+      const items = version.items.map((item, index) => ({ ...item, price: answer.items[index].price }));
+      const content = proposalContent({ ...answer, title: version.title, items }, version);
       const now = new Date().toISOString();
       const counter: ProposalVersion = {
         ...version, ...content, id: newId(), version: version.version + 1, author: "client", createdAt: now,

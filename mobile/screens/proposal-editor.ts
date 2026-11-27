@@ -1,5 +1,5 @@
 import type { ChangeCategory, ChangeItem, Proposal, ProposalVersion } from "../../shared/types";
-import { api, isConflict } from "../api/client";
+import { api, isConflict, isOutcomeUnknown } from "../api/client";
 import { categoryLabels, formatMoney, parsePrice, priceSummary } from "../proposals/model";
 import { errorNotice, mutation } from "../ui/async";
 import { card, dialog, hint, page, pageBody, pageTitle, primaryButton, secondaryButton } from "../ui/components";
@@ -85,7 +85,7 @@ export function proposalEditor(proposal: Proposal, version: ProposalVersion) {
       conditions: conditions.value, comment: version.comment,
     };
     void save.run(() => api.updateProposal(proposal.id, { expectedVersionId: version.id, content }),
-      () => Router.pop(), (error) => { conflict.value = isConflict(error); });
+      () => Router.pop(), (error) => { conflict.value = isConflict(error) || isOutcomeUnknown(error); });
   }
 
   return page("proposal-editor", pageBody(

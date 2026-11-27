@@ -1,8 +1,7 @@
 import type {
   ApiError, ID, Order, OrderDetail, OrderImportResult, OrderInput, OrderSummary,
-  ProposalDetail, ProposalResult, PublicCounterContent, PublishProposal, Service, ServiceInput, UpdateProposal, VersionAction,
+  ProposalDetail, ProposalResult, PublishProposal, Service, ServiceInput, UpdateProposal, VersionAction,
 } from "../../shared/types";
-import { mockApi } from "./mock";
 
 export type OrderPatch = Partial<Pick<Order, "title" | "serviceId" | "agreements" | "completedWork" | "deadline" | "status">>;
 export type AiInput = { text?: string; files?: readonly File[] };
@@ -11,6 +10,8 @@ export type ReviseInput = AiInput & { expectedVersionId: ID };
 
 export interface ApiClient {
   readonly demo: boolean;
+  readonly demoExamples?: { service: string; order: string; changes: string };
+  allowInitialSessionRetry?(): void;
   listServices(): Promise<Service[]>;
   getService(id: ID): Promise<Service>;
   createService(input: ServiceInput): Promise<Service>;
@@ -30,12 +31,15 @@ export interface ApiClient {
   publishProposal(id: ID, input: PublishProposal): Promise<ProposalResult>;
   approveProposal(id: ID, input: VersionAction): Promise<ProposalResult>;
   rejectProposal(id: ID, input: VersionAction): Promise<ProposalResult>;
+  revokeLink?(id: ID, input: VersionAction): Promise<ProposalResult>;
   // The future transport supplies a browser-openable URL. Its acquisition is outside the v1 contract.
   temporaryPdfUrl?(versionId: ID): Promise<string>;
-  respondToDemoCounter?(id: ID, input: VersionAction & { content: PublicCounterContent }): Promise<ProposalResult>;
+  respondToDemoCounter?(id: ID, input: VersionAction): Promise<ProposalResult>;
 }
 
-export const api: ApiClient = mockApi;
+export let api: ApiClient;
+
+export function configureApi(client: ApiClient) { api = client; }
 
 export function errorMessage(error: unknown): string {
   return (error as Partial<ApiError> | null)?.error?.message ?? "Не удалось выполнить действие. Попробуйте ещё раз.";
@@ -43,5 +47,10 @@ export function errorMessage(error: unknown): string {
 
 export function isConflict(error: unknown) {
   const code = (error as Partial<ApiError> | null)?.error?.code;
-  return code === "VERSION_CONFLICT" || code === "ORDER_CHANGED" || code === "OPEN_PROPOSAL_EXISTS" || code === "INVALID_STATE";
+  const status = (error as { status?: number } | null)?.status;
+  return status === 409 || code === "VERSION_CONFLICT" || code === "ORDER_CHANGED" || code === "OPEN_PROPOSAL_EXISTS" || code === "INVALID_STATE";
+}
+
+export function isOutcomeUnknown(error: unknown) {
+  return (error as { outcomeUnknown?: boolean } | null)?.outcomeUnknown === true;
 }

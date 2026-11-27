@@ -1,4 +1,5 @@
 import { cardStyle } from "./components";
+import { trackFormFocus } from "./form-focus";
 import { colors, radius, space, type } from "./theme";
 
 const fieldStyle = {
@@ -7,6 +8,7 @@ const fieldStyle = {
 };
 
 export function field(label: string, input: UIInput | UITextArea) {
+  trackFormFocus(input);
   return UIColumn(UIText(label).style(type.label), input).style({ gap: space.sm });
 }
 

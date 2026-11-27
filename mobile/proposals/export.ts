@@ -31,11 +31,14 @@ export async function prepareExport(order: Order, proposal: Proposal, version: P
   const preparation = { expectedVersionId, format };
   if (format === "link") {
     if (api.demo) throw exportError("Интерактивная ссылка появится после подключения сервера.");
+    if (proposal.shareUrl && (proposal.status === "countered" || proposal.status === "approved" || proposal.status === "rejected")) {
+      return { kind: "url" as const, url: browserUrl(proposal.shareUrl) };
+    }
     const published = await api.publishProposal(proposal.id, preparation);
     return { kind: "url" as const, url: browserUrl(published.proposal.shareUrl) };
   }
   if (format === "pdf") {
-    if (!api.temporaryPdfUrl) throw exportError("PDF появится после подключения сервера.");
+    if (!api.temporaryPdfUrl) throw exportError(api.demo ? "PDF появится после подключения сервера." : "PDF станет доступен после подключения подписанных ссылок.");
     const url = browserUrl(await api.temporaryPdfUrl(expectedVersionId));
     if (proposal.status === "draft") await api.publishProposal(proposal.id, preparation);
     return { kind: "url" as const, url };

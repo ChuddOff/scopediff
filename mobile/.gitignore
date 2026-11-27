@@ -2,6 +2,20 @@
 # (.lecodes/manifest.json). Regenerate with `lecodes update` / re-attach with `lecodes link`.
 .lecodes/
 
+# Developer configuration and credentials
+.env
+.env.*
+*.local
+*.local.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+secrets/
+credentials/
+.mcp.json
+
 # Render / preview outputs and test failure frames
 screenshot.png
 shots/
@@ -11,3 +25,5 @@ tests/.shots/
 node_modules/
 
 dist/
+/app.js
+/app.js.map

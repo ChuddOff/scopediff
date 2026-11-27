@@ -1,12 +1,15 @@
 import type { ID, Proposal, Service } from "../shared/types";
 import { api } from "./api/client";
+import { isOpen } from "./proposals/model";
 import { aiInputScreen } from "./screens/ai-input";
 import { changeMethods, creationMethods } from "./screens/creation-methods";
 import { orderDetail } from "./screens/order-detail";
 import { orderForm } from "./screens/order-form";
+import { ordersScreen } from "./screens/orders";
 import { proposalScreen } from "./screens/proposal";
 import { serviceDetail } from "./screens/service-detail";
 import { serviceForm } from "./screens/service-form";
+import { servicesScreen } from "./screens/services";
 
 function servicePage(id: ID) {
   return serviceDetail(id, (service) => Router.push(serviceForm(service, () => Router.pop())), newOrder);
@@ -25,16 +28,20 @@ function proposalPage(id: ID, versionId?: ID): UIScreen {
 export function openService(id: ID) { Router.push(servicePage(id)); }
 export function openOrder(id: ID) { Router.push(orderPage(id)); }
 
+function reviewServices() { Router.push(servicesScreen(newService, openService, () => Router.pop())); }
+function reviewOrders() { Router.push(ordersScreen(newOrder, openOrder, () => Router.pop())); }
+
 export function newService() {
   Router.push(creationMethods("service", (method) => {
     if (method === "manual") {
-      Router.replace(serviceForm(null, (service) => Router.replace(servicePage(service.id))));
+      Router.replace(serviceForm(null, (service) => Router.replace(servicePage(service.id)), reviewServices));
       return;
     }
     Router.replace(aiInputScreen({
       entity: "service", mode: method, title: method === "voice" ? "Услуги голосом" : "Услуги из скриншотов",
       button: "Импортировать услуги", submit: api.importServices,
       onSaved: () => Router.pop(),
+      onReview: reviewServices,
     }));
   }));
 }
@@ -42,7 +49,7 @@ export function newService() {
 export function newOrder(service?: Service) {
   Router.push(creationMethods("order", (method) => {
     if (method === "manual") {
-      Router.replace(orderForm(null, service ?? null, (order) => Router.replace(orderPage(order.id))));
+      Router.replace(orderForm(null, service ?? null, (order) => Router.replace(orderPage(order.id)), reviewOrders));
       return;
     }
     Router.replace(aiInputScreen({
@@ -50,20 +57,27 @@ export function newOrder(service?: Service) {
       title: method === "voice" ? "Заказ голосом" : "Заказ из скриншотов", button: "Импортировать заказ",
       submit: (input, serviceId) => api.importOrder({ ...input, serviceId }),
       onSaved: ({ order }) => Router.replace(orderPage(order.id)),
+      onReview: reviewOrders,
     }));
   }, service));
 }
 
 function openChanges(orderId: ID, proposal?: Proposal, returnToProposal = false) {
   const title = proposal ? "Добавить замечания" : "Добавить правки";
+  let target = proposal;
   Router.push(changeMethods(title, (mode) => Router.replace(aiInputScreen({
     entity: "changes", mode, title, button: "Обработать пожелания",
-    submit: (input) => proposal
-      ? api.reviseProposal(proposal.id, { ...input, expectedVersionId: proposal.currentVersionId })
+    submit: (input) => target
+      ? api.reviseProposal(target.id, { ...input, expectedVersionId: target.currentVersionId })
       : api.createProposal(orderId, input),
     onSaved: (result) => {
-      if (returnToProposal) Router.pop();
+      if (returnToProposal && result.proposal.id === proposal?.id) Router.pop();
       else Router.replace(proposalPage(result.proposal.id));
+    },
+    onReview: async () => {
+      const { proposals } = await api.getOrder(orderId);
+      target = proposals.find((item) => isOpen(item.status)) ?? proposal;
+      Router.push(orderPage(orderId));
     },
   }))));
 }

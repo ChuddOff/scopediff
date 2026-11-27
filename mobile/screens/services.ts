@@ -6,7 +6,7 @@ import { colors, space, type } from "../ui/theme";
 
 function serviceCard(service: Service, onOpen: () => void) {
   return UIButton(
-    UIText(service.name).style(type.card),
+    UIText(service.name).style({ ...type.card, lineClamp: 2 }),
     service.description ? UIText(service.description).style({ ...type.body, color: colors.textMuted, lineClamp: 3 }) : null,
   ).style({
     ...cardStyle, flexDirection: "column", alignItems: "stretch", padding: space.lg,
@@ -35,7 +35,7 @@ function importCard(onCreate: () => void) {
   }).named("import-services").onClick(onCreate);
 }
 
-export function servicesScreen(onCreate: () => void, onOpen: (id: ID) => void) {
+export function servicesScreen(onCreate: () => void, onOpen: (id: ID) => void, onBack?: () => void) {
   const services = resource(api.listServices);
   return services.bind(page("services", pageBody(
     UIColumn(
@@ -46,5 +46,5 @@ export function servicesScreen(onCreate: () => void, onOpen: (id: ID) => void) {
     services.view((items) => items.length
       ? items.map((service) => serviceCard(service, () => onOpen(service.id)))
       : [emptyState("Услуг пока нет", "Создайте услугу вручную или импортируйте её описание.")], space.md),
-  ), { action: primaryButton("Создать услугу", "new-service", onCreate, assetIcon("lucide:plus")) }));
+  ), { action: primaryButton("Создать услугу", "new-service", onCreate, assetIcon("lucide:plus")), onBack }));
 }

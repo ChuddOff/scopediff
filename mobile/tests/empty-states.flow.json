@@ -1,0 +1,160 @@
+{
+  "name": "Пустые списки после удаления и доступность создания",
+  "steps": [
+    {
+      "tap": "order-coffee-branding"
+    },
+    {
+      "tap": "order-menu"
+    },
+    {
+      "tap": "delete-order"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "order-coffee-branding"
+      }
+    },
+    {
+      "tap": "order-studio-landing"
+    },
+    {
+      "tap": "order-menu"
+    },
+    {
+      "tap": "delete-order"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "order-studio-landing"
+      }
+    },
+    {
+      "tap": "order-spring-materials"
+    },
+    {
+      "tap": "order-menu"
+    },
+    {
+      "tap": "delete-order"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "order-spring-materials"
+      }
+    },
+    {
+      "expect": {
+        "text": "Нет активных заказов"
+      }
+    },
+    {
+      "tap": "filter-completed"
+    },
+    {
+      "tap": "order-social-templates"
+    },
+    {
+      "tap": "order-menu"
+    },
+    {
+      "tap": "delete-order"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "order-social-templates"
+      }
+    },
+    {
+      "tap": "order-market-presentation"
+    },
+    {
+      "tap": "order-menu"
+    },
+    {
+      "tap": "delete-order"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "order-market-presentation"
+      }
+    },
+    {
+      "expect": {
+        "text": "Нет завершённых заказов"
+      }
+    },
+    {
+      "tap": "tab-services"
+    },
+    {
+      "tap": "service-branding"
+    },
+    { "tap": "service-menu" },
+    {
+      "tap": "delete-service"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "service-branding"
+      }
+    },
+    {
+      "tap": "service-landing"
+    },
+    { "tap": "service-menu" },
+    {
+      "tap": "delete-service"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "service-landing"
+      }
+    },
+    {
+      "tap": "service-presentation"
+    },
+    { "tap": "service-menu" },
+    {
+      "tap": "delete-service"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "service-presentation"
+      }
+    },
+    {
+      "tap": "service-social"
+    },
+    { "tap": "service-menu" },
+    {
+      "tap": "delete-service"
+    },
+    {
+      "tap": "confirm-delete",
+      "expect": {
+        "notNode": "service-social"
+      }
+    },
+    {
+      "expect": {
+        "text": "Услуг пока нет",
+        "node": "new-service"
+      }
+    },
+    {
+      "tap": "new-service",
+      "expect": {
+        "node": "method-manual"
+      }
+    }
+  ]
+}

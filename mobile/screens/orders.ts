@@ -18,7 +18,7 @@ export function orderStatus(status: OrderStatus) {
 
 function orderCard(order: OrderSummary, onOpen: () => void) {
   return UIButton(
-    UIText(order.title).style(type.card),
+    UIText(order.title).style({ ...type.card, lineClamp: 2 }),
     UIRow(
       UIText(order.serviceSnapshot?.name ?? "Услуга не выбрана").style({
         ...type.small,
@@ -52,7 +52,7 @@ function activeCount(count: () => number | null) {
   }).named("active-count");
 }
 
-export function ordersScreen(onCreate: () => void, onOpen: (id: string) => void) {
+export function ordersScreen(onCreate: () => void, onOpen: (id: string) => void, onBack?: () => void) {
   const filter = signal<OrderStatus>("active");
   const orders = resource(api.listOrders);
 
@@ -92,5 +92,6 @@ export function ordersScreen(onCreate: () => void, onOpen: (id: string) => void)
 
   return orders.bind(page("orders", pageBody(heading, filters, list), {
     action: primaryButton("Новый заказ", "new-order", onCreate, assetIcon("lucide:plus")),
+    onBack,
   }));
 }

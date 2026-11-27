@@ -1,4 +1,4 @@
-import { errorMessage } from "../api/client";
+import { api, errorMessage } from "../api/client";
 import { card, hint, secondaryButton } from "./components";
 import { colors, radius, space, type } from "./theme";
 
@@ -6,11 +6,13 @@ type LoadState<T> = { status: "loading" } | { status: "ready"; data: T } | { sta
 
 export function resource<T>(read: () => Promise<T>) {
   const state = signal<LoadState<T>>({ status: "loading" });
+  const loading = signal(false);
   let request = 0;
   let renderedData: string | undefined;
 
   async function load() {
     const expected = ++request;
+    loading.value = true;
     if (state.value.status !== "ready") state.value = { status: "loading" };
     try {
       const data = await read();
@@ -22,14 +24,24 @@ export function resource<T>(read: () => Promise<T>) {
       }
     } catch (error) {
       if (expected === request) state.value = { status: "error", message: errorMessage(error) };
+    } finally {
+      if (expected === request) loading.value = false;
     }
+  }
+
+  async function refresh() {
+    if (loading.value) return;
+    api.allowInitialSessionRetry?.();
+    await load();
   }
 
   return {
     state,
+    loading,
     load,
+    refresh,
     bind(screen: UIScreen) {
-      return screen.onOpen(load).onClose(() => { request++; });
+      return screen.onOpen(load).onClose(() => { request++; loading.value = false; });
     },
     view(render: (data: T) => UINodeChild[], gap = space.lg) {
       return UIColumn(() => {
@@ -37,7 +49,7 @@ export function resource<T>(read: () => Promise<T>) {
         switch (current.status) {
           case "ready": return render(current.data);
           case "loading": return [card(hint("Загрузка…"))];
-          case "error": return [card(hint(current.message), secondaryButton("Повторить", "retry", load))];
+          case "error": return [card(hint(current.message), secondaryButton("Повторить", "retry", refresh))];
         }
       }).style({ gap });
     },

@@ -14,7 +14,7 @@ export function isOpen(status: ProposalStatus) {
 }
 
 export function formatDate(value: string) {
-  return value.slice(0, 10).split("-").reverse().join(".");
+  return date(`${value.slice(0, 10)}T00:00:00`).format("D MMMM YYYY", "ru");
 }
 
 export function formatMoney(value: number) {
