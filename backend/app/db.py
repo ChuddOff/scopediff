@@ -1,5 +1,7 @@
 import os
+from typing import Annotated
 
+from fastapi import Depends, Request
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, URL, make_url
 from sqlalchemy.exc import ArgumentError
@@ -29,3 +31,10 @@ def create_database_engine() -> Engine:
         pool_timeout=2,
         hide_parameters=True,
     )
+
+
+def get_engine(request: Request) -> Engine:
+    return request.app.state.engine
+
+
+Database = Annotated[Engine, Depends(get_engine)]
