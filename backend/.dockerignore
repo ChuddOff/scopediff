@@ -1,0 +1,16 @@
+.venv/
+venv/
+local-work/
+.env
+.env.*
+.git
+**/__pycache__/
+**/.pytest_cache/
+*.log
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/credentials.json
+**/secrets/
+pgdata/
