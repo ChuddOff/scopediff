@@ -1,7 +1,7 @@
 import type { ID, Service } from "../../shared/types";
 import { api } from "../api/client";
 import { resource } from "./async";
-import { arrow, cardStyle, dialog, hint, secondaryButton } from "./components";
+import { actionMenu, arrow, cardStyle, hint, secondaryButton } from "./components";
 import { colors, space, type } from "./theme";
 
 type ServiceChoice = { id: ID | null; name: string; description: string };
@@ -10,7 +10,7 @@ export function servicePicker(initial: ServiceChoice | null) {
   const selected = signal(initial);
   const services = resource(api.listServices);
 
-  function choose(service: Service | null) {
+  function choose(service: Service) {
     selected.value = service;
     modal.hide();
   }
@@ -19,12 +19,7 @@ export function servicePicker(initial: ServiceChoice | null) {
     ? items.map((service) => secondaryButton(service.name, `choose-service-${service.id}`, () => choose(service)))
     : [hint("В каталоге пока нет услуг.")]);
 
-  const modal = dialog(
-    UIText("Выберите услугу").style(type.card),
-    secondaryButton("Без услуги", "choose-no-service", () => choose(null)),
-    UIScrollable(choices).style({ maxHeight: 260, minHeight: 0, flexShrink: 1 }),
-    secondaryButton("Отмена", "cancel-service-picker", () => modal.hide()),
-  ).style({ maxHeight: "85%" });
+  const modal = actionMenu("Выберите услугу", "close-service-picker", choices);
 
   const control = UIButton(
     UIText(() => selected.value?.name ?? "Без услуги").style({ ...type.body, flex: 1, minWidth: 0, lineClamp: 2 }),
