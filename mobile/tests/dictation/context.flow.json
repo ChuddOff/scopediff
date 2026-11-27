@@ -1,0 +1,15 @@
+{
+  "name": "Контекстная диктовка, отмена, сбой и защита ручного ввода",
+  "steps": [
+    { "tap": "test-description-mic", "expect": { "text": "Идёт запись" } },
+    { "tap": "test-description-mic", "expect": { "node": "test-description-undo", "value": { "target": "test-description", "equals": "Исходный текст.\nНовый абзац." } } },
+    { "tap": "test-description-undo", "expect": { "value": { "target": "test-description", "equals": "Исходный текст." } } },
+    { "tap": "test-description-mic" },
+    { "tap": "test-description-mic", "expect": { "text": "Тестовый сбой обработки.", "value": { "target": "test-description", "equals": "Исходный текст." } } },
+    { "tap": "test-description-mic" },
+    { "tap": "test-description-mic", "expect": { "text": "Демо: обрабатываем диктовку" } },
+    { "tap": "test-description-mic", "expect": { "text": "Запросов: 3" } },
+    { "type": "test-description", "text": "Ручное уточнение." },
+    { "tap": "finish-request", "expect": { "text": "Ваши правки сохранены.", "notNode": "test-description-undo", "value": { "target": "test-description", "equals": "Ручное уточнение." } } }
+  ]
+}

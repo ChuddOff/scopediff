@@ -1,0 +1,22 @@
+{
+  "name": "Выбор услуги, закрытие списка крестиком и срок заказа",
+  "steps": [
+    { "tap": "new-order" },
+    { "tap": "method-manual", "expect": { "screen": "order-form", "text": "Без услуги" } },
+    { "tap": "select-service", "expect": { "text": "Выберите услугу" } },
+    { "expect": { "node": "close-service-picker", "notNode": "choose-no-service" } },
+    { "expect": { "notNode": "cancel-service-picker" } },
+    { "tap": "choose-service-landing", "expect": { "text": "Дизайн лендинга" } },
+    { "type": "order-title", "text": "Сайт портфолио" },
+    { "type": "order-deadline", "text": "2026-12-08", "expect": { "text": "8 декабря 2026", "value": { "target": "order-deadline", "equals": "2026-12-08" } } },
+    { "tap": "save-order", "expect": { "screen": "order-detail", "text": "Срок · 8 декабря 2026" } },
+    { "expect": { "text": "Дизайн лендинга" } },
+    { "tap": "edit-order", "expect": { "value": { "target": "order-deadline", "equals": "2026-12-08" } } },
+    { "tap": "select-service" },
+    { "tap": "close-service-picker", "expect": { "text": "Дизайн лендинга", "notText": "Выберите услугу" } },
+    { "tap": "clear-deadline", "expect": { "text": "Выбрать дату", "notNode": "clear-deadline", "value": { "target": "order-deadline", "equals": "" } } },
+    { "tap": "save-order", "expect": { "screen": "order-detail", "notText": "Срок ·" } },
+    { "expect": { "text": "Дизайн лендинга" } },
+    { "tap": "back", "expect": { "text": "4 в работе" } }
+  ]
+}
