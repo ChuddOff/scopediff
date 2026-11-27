@@ -1,17 +1,21 @@
 import type { ID, Service } from "../../shared/types";
 import { api, isConflict, isOutcomeUnknown, type AiInput } from "../api/client";
 import { errorNotice, mutation } from "../ui/async";
-import { aiNote, hint, page, pageBody, pageTitle, primaryButton, secondaryButton } from "../ui/components";
-import { field, textArea } from "../ui/fields";
+import { aiNote, cardStyle, hint, icon, iconTile, page, pageBody, pageTitle, primaryButton, secondaryButton } from "../ui/components";
+import { dictationField } from "../ui/dictation-field";
+import { field, fieldLabel, textArea } from "../ui/fields";
 import { servicePicker } from "../ui/service-picker";
-import { colors, space, type } from "../ui/theme";
+import { speechCapture } from "../ui/speech";
+import { colors, radius, space, type } from "../ui/theme";
 
+export type AiMode = "voice" | "screenshots" | "text";
 type AiScreenOptions<T> = {
   entity: "service" | "order" | "changes";
-  mode: "voice" | "screenshots" | "text";
+  mode: AiMode;
   title: string;
   button: string;
   preset?: Service;
+  context?: string;
   submit: (input: AiInput, serviceId?: ID) => Promise<T>;
   onSaved: (result: T) => void;
   onReview?: () => Promise<void> | void;
@@ -22,48 +26,34 @@ export function aiInputScreen<T>(options: AiScreenOptions<T>) {
   const review = mutation();
   const needsReview = signal(false);
   const example = api.demoExamples?.[options.entity];
-  const text = textArea("ai-text", options.entity === "changes" ? "Опишите новые пожелания" : "Введите описание", "");
   const picker = options.entity === "order" ? servicePicker(options.preset ?? null) : null;
   const screenshots = signal<File[]>([]);
   const picking = signal(false);
-  const recording = signal(false);
-  const starting = signal(false);
   const inputError = signal("");
-  const speech = options.mode === "voice" && SpeechRecognizer.supported ? new SpeechRecognizer() : null;
+  const showVoiceText = signal(!SpeechRecognizer.supported);
+  const voiceText = options.mode === "voice" ? textArea("ai-text", "Опишите пожелания или вставьте переписку", "") : null;
+  const written = options.mode === "voice" ? null : dictationField(
+    "ai-text", options.mode === "screenshots" ? "Комментарий" : "Пожелания",
+    options.mode === "screenshots" ? "Что важно учесть в переписке" : "Вставьте переписку или опишите, что нужно изменить", "",
+    {
+      kind: options.entity === "changes" ? "change_item" : options.entity,
+      title: () => options.title,
+      context: () => {
+        const service = picker?.selected.value;
+        return [options.context, service ? `Услуга: ${service.name}. ${service.description}` : ""].filter(Boolean).join("\n");
+      },
+      minHeight: options.mode === "text" ? 180 : 82,
+    },
+  );
+  const text = voiceText ?? written!.input;
   let visible = false;
-  let prefix = "";
-
-  speech?.addEventListener("result", ({ transcript }) => {
-    if (visible) text.value = `${prefix}${transcript}`.slice(0, 12000);
+  const speech = speechCapture((transcript) => {
+    text.value = [text.value.trim(), transcript].filter(Boolean).join("\n").slice(0, 12000);
+    showVoiceText.value = true;
+  }, (error) => {
+    inputError.value = error;
+    showVoiceText.value = true;
   });
-  speech?.addEventListener("end", () => { recording.value = false; });
-  speech?.addEventListener("error", (code) => {
-    if (!visible || code === "aborted") return;
-    inputError.value = code === "noSpeech"
-      ? "Речь не распознана. Попробуйте снова или введите текст."
-      : "Распознавание недоступно. Введите текст вручную.";
-  });
-
-  async function toggleSpeech() {
-    if (!speech || starting.value || save.pending.value) return;
-    if (recording.value) {
-      speech.stop();
-      return;
-    }
-    inputError.value = "";
-    text.blur();
-    prefix = text.value.trim() ? `${text.value.trim()}\n` : "";
-    starting.value = true;
-    try {
-      await speech.start({ language: "ru-RU" });
-      if (visible) recording.value = speech.listening;
-      else speech.abort();
-    } catch {
-      if (visible && !inputError.value) inputError.value = "Не удалось запустить распознавание. Введите текст вручную.";
-    } finally {
-      starting.value = false;
-    }
-  }
 
   async function pickScreenshots() {
     if (picking.value || save.pending.value) return;
@@ -79,24 +69,55 @@ export function aiInputScreen<T>(options: AiScreenOptions<T>) {
     }
   }
 
-  const voiceInput = options.mode === "voice" && (speech
-    ? secondaryButton(() => {
-      if (starting.value) return "Включаем микрофон…";
-      return recording.value ? "Остановить запись" : "Диктовать";
-    }, "dictate", () => { void toggleSpeech(); })
-    : hint("В этом режиме распознавание речи недоступно. Введите текст вручную."));
+  const voiceStatus = () => {
+    switch (speech.state.value) {
+      case "starting": return "Включаем микрофон…";
+      case "recording": return "Идёт запись · нажмите, чтобы остановить";
+      case "stopping": return "Завершаем запись…";
+      default: return "Нажмите, чтобы начать запись";
+    }
+  };
+  const voiceInput = voiceText && UIColumn(
+    SpeechRecognizer.supported ? UIColumn(
+      UIButton(UIColumn(() => [icon(speech.state.value === "recording" ? assetIcon("lucide:square") : assetIcon("lucide:mic"), colors.accentInk, 34)]))
+        .style({ width: 82, height: 82, borderRadius: 24, backgroundColor: colors.ai, $pressed: { backgroundColor: colors.aiStrong } })
+        .named("dictate").onClick(() => {
+          if (save.pending.value) return;
+          inputError.value = "";
+          text.blur();
+          void speech.toggle();
+        }),
+      UIText(voiceStatus).style({ ...type.label, textAlign: "center", color: colors.textMuted }),
+    ).style({ alignItems: "center", gap: space.md, paddingVertical: space.xl }) : hint("Распознавание речи недоступно. Введите текст вручную."),
+    field("Текст", voiceText).style({ display: () => showVoiceText.value ? "flex" : "none" }),
+    SpeechRecognizer.supported ? secondaryButton("Ввести текст", "voice-use-text", () => { showVoiceText.value = true; })
+      .style({ display: () => showVoiceText.value || speech.state.value !== "idle" ? "none" : "flex" }) : null,
+  ).style({ gap: space.sm });
 
-  const fileInput = options.mode !== "voice" && UIColumn(
-    secondaryButton(() => picking.value ? "Открываем выбор…" : screenshots.value.length ? "Заменить скриншоты" : "Выбрать скриншоты",
-      "pick-screenshots", () => { void pickScreenshots(); }),
-    UIColumn(() => screenshots.value.map((file) => hint(file.name))).style({ gap: space.xs }),
-    secondaryButton("Убрать скриншоты", "clear-screenshots", () => { screenshots.value = []; })
-      .style({ display: () => screenshots.value.length ? "flex" : "none" }),
-    UIText("До 3 изображений PNG, JPEG или WebP, каждое до 5 МБ.").style({ ...type.small, color: colors.textMuted }),
+  const fileInput = options.mode === "screenshots" && UIColumn(
+    UIButton(
+      iconTile(assetIcon("lucide:images")),
+      UIText(() => picking.value ? "Открываем выбор…" : screenshots.value.length ? "Заменить скриншоты" : "Выбрать скриншоты")
+        .style({ ...type.card, color: colors.accentInk, textAlign: "center" }),
+      UIText("До 3 изображений PNG, JPEG или WebP, каждое до 5 МБ.").style({ ...type.small, color: colors.textMuted, textAlign: "center" }),
+    ).style({
+      ...cardStyle, flexDirection: "column", minHeight: 132, gap: space.sm, padding: space.lg,
+      $pressed: { backgroundColor: colors.ai },
+    }).named("pick-screenshots").onClick(() => { void pickScreenshots(); }),
+    UIColumn(() => screenshots.value.map((file, index) => UIRow(
+      UIImage(file).style({ width: 44, height: 44, borderRadius: space.sm, objectFit: "cover", flexShrink: 0 }),
+      UIText(file.name).style({ ...type.small, flex: 1, minWidth: 0, lineClamp: 2 }),
+      UIButton(icon(assetIcon("lucide:x"), colors.textMuted, 16))
+        .style({ width: 44, height: 44, borderRadius: radius.control, $pressed: { backgroundColor: colors.control } })
+        .named(`remove-screenshot-${index + 1}`).onClick(() => {
+          if (save.pending.value) return;
+          screenshots.value = screenshots.value.filter((_, position) => position !== index);
+        }),
+    ).style({ ...cardStyle, padding: space.sm, gap: space.sm, alignItems: "center" }))).style({ gap: space.sm }),
   ).style({ gap: space.sm });
 
   function submit() {
-    if (picking.value || recording.value || starting.value || review.pending.value) return;
+    if (picking.value || speech.state.value !== "idle" || written?.busy() || review.pending.value) return;
     if (needsReview.value && options.onReview) {
       void review.run(async () => options.onReview?.(), () => { needsReview.value = false; });
       return;
@@ -111,17 +132,20 @@ export function aiInputScreen<T>(options: AiScreenOptions<T>) {
 
   const screen = page(options.entity === "changes" ? "change-input" : `import-${options.entity}-${options.mode}`, pageBody(
     pageTitle(options.title),
-    api.demo ? aiNote("Демонстрационный режим", options.mode === "voice"
-      ? "Текст обрабатывается локально. Микрофон использует распознавание вашего устройства или браузера."
-      : options.mode === "screenshots"
-        ? "Для скриншотов используются готовые примеры. Выбранные изображения остаются на устройстве."
-        : "Текст обрабатывается локально. Перечислите пожелания с новой строки.")
-      : aiNote("Перед отправкой в AI", "Уберите из переписки личные данные и лишние фрагменты. Текст и скриншоты будут переданы для обработки AI."),
-    picker && UIColumn(UIText("Услуга · необязательно").style(type.label), picker.control).style({ gap: space.sm }),
+    picker && UIColumn(fieldLabel("Услуга"), picker.control).style({ gap: space.sm }),
     voiceInput,
     fileInput,
-    field(options.mode === "screenshots" ? "Текст к скриншотам · необязательно" : "Текст", text),
-    example ? secondaryButton("Заполнить пример", "ai-example", () => { if (!recording.value && !starting.value && !save.pending.value) text.value = example; }) : null,
+    written?.node,
+    api.demo ? aiNote("Демонстрационный режим", options.mode === "screenshots"
+      ? "Для скриншотов используются готовые примеры. Изображения остаются на устройстве."
+      : "Текст обрабатывается локально. Перечислите пожелания с новой строки.")
+      : aiNote(options.mode === "text" ? "Помогите AI понять пожелания" : "Перед отправкой в AI",
+        "Оставьте только нужные фрагменты и уберите личные данные. Материалы будут переданы для обработки AI."),
+    example ? secondaryButton("Заполнить пример", "ai-example", () => {
+      if (speech.state.value !== "idle" || written?.busy() || save.pending.value) return;
+      text.value = example;
+      showVoiceText.value = true;
+    }) : null,
   ), {
     feedback: errorNotice(() => inputError.value || review.error.value || save.error.value),
     onBack: () => { if (!save.pending.value && !review.pending.value) Router.pop(); },
@@ -131,11 +155,10 @@ export function aiInputScreen<T>(options: AiScreenOptions<T>) {
       return needsReview.value ? "Проверить данные" : options.button;
     }, "submit-ai", submit, assetIcon("lucide:sparkles")),
   });
-
   if (picker) screen.widgets(picker.modal);
   return screen.onOpen(() => { visible = true; }).onClose(() => {
     visible = false;
-    speech?.abort();
-    recording.value = false;
+    speech.cancel();
+    written?.cancel();
   });
 }

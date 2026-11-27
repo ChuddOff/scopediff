@@ -4,14 +4,14 @@ import { resource } from "./async";
 import { arrow, cardStyle, dialog, hint, secondaryButton } from "./components";
 import { colors, space, type } from "./theme";
 
-type ServiceChoice = { id: ID | null; name: string };
+type ServiceChoice = { id: ID | null; name: string; description: string };
 
 export function servicePicker(initial: ServiceChoice | null) {
   const selected = signal(initial);
   const services = resource(api.listServices);
 
   function choose(service: Service | null) {
-    selected.value = service ? { id: service.id, name: service.name } : null;
+    selected.value = service;
     modal.hide();
   }
 

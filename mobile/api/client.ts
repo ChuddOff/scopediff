@@ -7,6 +7,13 @@ export type OrderPatch = Partial<Pick<Order, "title" | "serviceId" | "agreements
 export type AiInput = { text?: string; files?: readonly File[] };
 export type OrderImportInput = AiInput & { serviceId?: ID };
 export type ReviseInput = AiInput & { expectedVersionId: ID };
+export type EnhanceDescriptionInput = {
+  kind: "service" | "order" | "change_item" | "conditions";
+  title: string;
+  currentText: string;
+  dictation: string;
+  context: string;
+};
 
 export interface ApiClient {
   readonly demo: boolean;
@@ -18,6 +25,7 @@ export interface ApiClient {
   updateService(id: ID, input: Partial<ServiceInput>): Promise<Service>;
   deleteService(id: ID): Promise<void>;
   importServices(input: AiInput): Promise<Service[]>;
+  enhanceDescription(input: EnhanceDescriptionInput): Promise<{ text: string }>;
   listOrders(): Promise<OrderSummary[]>;
   getOrder(id: ID): Promise<OrderDetail>;
   createOrder(input: OrderInput): Promise<Order>;

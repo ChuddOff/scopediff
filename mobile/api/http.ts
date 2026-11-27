@@ -30,6 +30,7 @@ type Request = {
   form?: FormData;
   accept?: string;
   list?: boolean;
+  analysis?: boolean;
 };
 
 class HttpError extends Error implements ApiError {
@@ -116,11 +117,11 @@ export function createHttpApi(configuredBaseUrl: string, dependencies: Dependenc
     if (privateToken) headers.Authorization = `Bearer ${privateToken}`;
     if (spec.json !== undefined) headers["Content-Type"] = "application/json";
     const body = spec.form ?? (spec.json === undefined ? undefined : JSON.stringify(spec.json));
-    const mayHaveWritten = spec.method !== "GET" && spec.access !== "session";
+    const mayHaveWritten = spec.method !== "GET" && spec.access !== "session" && !spec.analysis;
     let response: FetchResponse | undefined;
     try {
       response = await request(`${baseUrl}${path}`, {
-        method: spec.method, headers, body, timeout: spec.form ? 90_000 : 20_000,
+        method: spec.method, headers, body, timeout: spec.form || spec.analysis ? 90_000 : 20_000,
         cache: spec.method === "GET" ? "no-store" : undefined,
       });
     } catch { /* The SDK reports timeouts and transport errors through the same channel. */ }
@@ -139,7 +140,7 @@ export function createHttpApi(configuredBaseUrl: string, dependencies: Dependenc
   }
 
   function decode<T>(response: FetchResponse, spec: Request): T {
-    const mayHaveWritten = spec.method !== "GET" && spec.access !== "session";
+    const mayHaveWritten = spec.method !== "GET" && spec.access !== "session" && !spec.analysis;
     let value: T;
     try { value = response.json<T>(); } catch { throw unexpectedResponse(response.status, mayHaveWritten); }
     if (typeof value !== "object" || value === null || Array.isArray(value) !== Boolean(spec.list)) {
@@ -209,6 +210,21 @@ export function createHttpApi(configuredBaseUrl: string, dependencies: Dependenc
     deleteService: (id) => remove(service(id)),
     async importServices(input) {
       return sendJson<Service[]>("/services/import", { method: "POST", status: 201, form: toForm(input), list: true });
+    },
+    async enhanceDescription(input) {
+      const path = "/ai/enhance-description";
+      try {
+        const response = await sendJson<{ text: unknown }>(path, { method: "POST", status: 200, json: input, analysis: true });
+        if (typeof response.text !== "string" || !response.text.trim() || response.text.length > 12000) {
+          throw unexpectedResponse(200, false);
+        }
+        return { text: response.text };
+      } catch (error) {
+        if (error instanceof HttpError && (error.status === 404 || error.status === 501)) {
+          throw new HttpError(error.status, "SERVICE_UNAVAILABLE", "Обработка диктовки пока недоступна. Введите текст вручную.");
+        }
+        throw error;
+      }
     },
     listOrders: () => get<OrderSummary[]>("/orders", true),
     getOrder: (id) => get<OrderDetail>(order(id)),

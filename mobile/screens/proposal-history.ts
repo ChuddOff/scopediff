@@ -1,23 +1,33 @@
 import type { ID, ProposalVersion } from "../../shared/types";
 import { api } from "../api/client";
 import { compareVersions } from "../proposals/diff";
-import { categoryLabels, formatDate, formatMoney, priceSummary } from "../proposals/model";
+import { categoryLabels, formatDate, formatMoney, priceSummary, proposalStatus, recentRounds } from "../proposals/model";
 import { resource } from "../ui/async";
 import { arrow, card, cardStyle, hint, page, pageBody, pageTitle } from "../ui/components";
 import { colors, space, type } from "../ui/theme";
 
-export function versionHistory(id: ID, openVersion: (id: ID) => void) {
-  const history = resource(() => api.getProposal(id));
+export function versionHistory(orderId: ID, openVersion: (proposalId: ID, versionId: ID) => void) {
+  const history = resource(async () => {
+    const { proposals } = await api.getOrder(orderId);
+    return Promise.all(recentRounds(proposals).map((proposal) => api.getProposal(proposal.id)));
+  });
   return history.bind(page("proposal-history", pageBody(
     pageTitle("История версий"),
-    history.view(({ proposal, versions }) => [...versions].reverse().map((version) => UIButton(
-      UIColumn(
-        UIText(`Версия ${version.version}${version.id === proposal.currentVersionId ? " · текущая" : ""}`).style(type.card),
-        hint(`${version.author === "client" ? "Заказчик" : "Исполнитель"} · ${formatDate(version.createdAt)}`),
-      ).style({ flex: 1, gap: space.xs }),
-      arrow(),
-    ).style({ ...cardStyle, padding: space.lg, gap: space.md, $pressed: { backgroundColor: colors.ai } })
-      .named(`history-version-${version.version}`).onClick(() => openVersion(version.id))), space.md),
+    history.view((rounds) => rounds.map(({ proposal, versions }, index) => {
+      const round = rounds.length - index;
+      return UIColumn(
+        rounds.length > 1 ? UIText(`Раунд ${round} · ${proposalStatus[proposal.status]}`).style(type.label) : null,
+        [...versions].reverse().map((version) => UIButton(
+          UIColumn(
+            UIText(`Версия ${version.version}${version.id === proposal.currentVersionId ? " · последняя в раунде" : ""}`).style(type.card),
+            hint(`${version.author === "client" ? "Заказчик" : "Исполнитель"} · ${formatDate(version.createdAt)}`),
+          ).style({ flex: 1, minWidth: 0, gap: space.xs }),
+          arrow(),
+        ).style({ ...cardStyle, padding: space.lg, gap: space.md, $pressed: { backgroundColor: colors.ai } })
+          .named(index === 0 ? `history-version-${version.version}` : `history-round-${round}-version-${version.version}`)
+          .onClick(() => openVersion(proposal.id, version.id))),
+      ).style({ gap: space.sm });
+    }), space.md),
   ), { onBack: () => Router.pop() }));
 }
 

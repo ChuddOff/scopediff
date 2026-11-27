@@ -193,6 +193,11 @@ export const mockApi: ApiClient = {
     return [...readState().services].sort((a, b) => a.name.localeCompare(b.name, "ru"));
   },
   async getService(id) { return find(readState().services, id, "Услуга не найдена."); },
+  async enhanceDescription({ currentText, dictation }) {
+    const speech = dictation.trim().replace(/\s+/g, " ").replace(/\s+([,.!?])/g, "$1");
+    const sentence = speech ? speech[0].toUpperCase() + speech.slice(1) + (/[.!?]$/.test(speech) ? "" : ".") : "";
+    return { text: [currentText.trim(), sentence].filter(Boolean).join("\n").slice(0, 12000) };
+  },
   async createService(input) {
     return mutate((state) => {
       const service = { id: newId(), ...serviceData(input) };

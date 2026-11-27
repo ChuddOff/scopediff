@@ -1,4 +1,4 @@
-import type { ChangeCategory, ChangeItem, ProposalStatus } from "../../shared/types";
+import type { ChangeCategory, ChangeItem, Proposal, ProposalStatus } from "../../shared/types";
 
 export const proposalStatus = {
   draft: "Черновик", pending: "На согласовании", countered: "Заказчик предложил изменения",
@@ -11,6 +11,14 @@ export const categoryLabels: Record<ChangeCategory, string> = {
 
 export function isOpen(status: ProposalStatus) {
   return status === "draft" || status === "pending" || status === "countered";
+}
+
+export function recentRounds(proposals: readonly Proposal[]) {
+  return [...proposals].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function currentRound(proposals: readonly Proposal[]) {
+  return proposals.find((proposal) => isOpen(proposal.status)) ?? recentRounds(proposals)[0];
 }
 
 export function formatDate(value: string) {

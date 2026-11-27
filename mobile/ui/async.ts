@@ -40,8 +40,16 @@ export function resource<T>(read: () => Promise<T>) {
     loading,
     load,
     refresh,
-    bind(screen: UIScreen) {
-      return screen.onOpen(load).onClose(() => { request++; loading.value = false; });
+    bind(screen: UIScreen, refreshOnResume = false) {
+      const resume = () => { if (!loading.value) void load(); };
+      return screen.onOpen(() => {
+        if (refreshOnResume) app.addEventListener("resume", resume);
+        void load();
+      }).onClose(() => {
+        if (refreshOnResume) app.removeEventListener("resume", resume);
+        request++;
+        loading.value = false;
+      });
     },
     view(render: (data: T) => UINodeChild[], gap = space.lg) {
       return UIColumn(() => {

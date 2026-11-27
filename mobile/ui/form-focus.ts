@@ -1,13 +1,13 @@
 type FormInput = UIInput | UITextArea;
 
-let focused: FormInput | undefined;
+let focused: { input: FormInput; anchor: FormInput | UIColumn } | undefined;
 let activeViewport: UIScrollable | undefined;
 
 function revealFocusedField() {
-  const input = focused;
+  const fieldFocus = focused;
   const viewport = activeViewport;
-  if (!input || !viewport || app.keyboardHeight <= 0) return;
-  const field = input.getBoundingClientRect();
+  if (!fieldFocus || !viewport || app.keyboardHeight <= 0) return;
+  const field = fieldFocus.anchor.getBoundingClientRect();
   const area = viewport.getBoundingClientRect();
   if (!field || !area) return;
 
@@ -17,14 +17,18 @@ function revealFocusedField() {
   if (!above && !below) return;
 
   const align = above || field.height + margin * 2 > area.height ? "start" : "end";
-  viewport.scrollToElement(input, { align, offset: margin, animated: false });
+  viewport.scrollToElement(fieldFocus.anchor, { align, offset: margin, animated: false });
 }
 
-export function trackFormFocus(input: FormInput) {
+export function trackFormFocus(input: FormInput, onChange?: (focused: boolean) => void, anchor: FormInput | UIColumn = input) {
   input.onFocus(() => {
-    focused = input;
+    focused = { input, anchor };
+    onChange?.(true);
     revealFocusedField();
-  }).onBlur(() => { if (focused === input) focused = undefined; });
+  }).onBlur(() => {
+    if (focused?.input === input) focused = undefined;
+    onChange?.(false);
+  });
 }
 
 export function bindKeyboardScroll(screen: UIScreen, viewport: UIScrollable) {

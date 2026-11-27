@@ -115,6 +115,43 @@ export function dialog(...children: UINodeChild[]) {
   });
 }
 
+export function actionMenu(title: string, closeName: string, contents: UINodeChild, canClose = () => true) {
+  const close = () => { if (canClose()) modal.hide(); };
+  const modal = dialog(
+    UIRow(
+      UIText(title).style({ ...type.card, flex: 1, minWidth: 0 }),
+      UIButton(icon(assetIcon("lucide:x"), colors.textMuted, 18)).style({
+        width: 40, height: 40, borderRadius: radius.control, $pressed: { backgroundColor: colors.control },
+      }).named(closeName).onClick(close),
+    ).style({ alignItems: "center", gap: space.sm }),
+    UIScrollable(contents).style({ flexShrink: 1, minHeight: 0 }),
+  ).style({ gap: space.sm, maxHeight: "85%" });
+  return modal.onDismiss(close);
+}
+
+export function menuAction(label: string | (() => string), name: string, source: SvgSource, onClick: () => void, danger = false) {
+  const color = danger ? colors.danger : colors.text;
+  return UIButton(icon(source, color, 18), UIText(label).style({ ...type.label, color, flex: 1, minWidth: 0 }))
+    .style({
+      ...cardStyle, borderColor: "#DFE2EA", borderRadius: radius.control, minHeight: 46,
+      paddingHorizontal: space.md, paddingVertical: space.sm, gap: space.md,
+      boxShadow: "0 1px 2px rgba(17,24,39,.04)",
+      $pressed: { backgroundColor: danger ? colors.dangerSurface : colors.bg },
+    }).named(name).onClick(onClick);
+}
+
+export function aiAction(title: string, description: string, name: string, source: SvgSource, onClick: () => void) {
+  return UIButton(
+    iconTile(source),
+    UIColumn(UIText(title).style({ ...type.card, color: colors.accentInk }), hint(description))
+      .style({ flex: 1, minWidth: 0, gap: space.xs }),
+    arrow(),
+  ).style({
+    ...cardStyle, backgroundColor: colors.ai, borderColor: colors.aiStrong, padding: space.lg, gap: space.md,
+    $pressed: { backgroundColor: colors.aiStrong },
+  }).named(name).onClick(onClick);
+}
+
 export function wordmark(fontSize = 24) {
   return UIText("scope", UIText(".").style({ color: colors.accent }), "diff").style({
     fontSize, lineHeight: fontSize + 6, fontWeight: 800, letterSpacing: -0.9,

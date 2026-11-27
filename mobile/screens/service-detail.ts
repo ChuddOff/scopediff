@@ -1,21 +1,19 @@
 import type { ID, Service } from "../../shared/types";
 import { api } from "../api/client";
 import { resource } from "../ui/async";
-import { card, dialog, hint, page, pageBody, primaryButton, recordHeader, recordTitle, secondaryButton } from "../ui/components";
+import { actionMenu, card, hint, menuAction, page, pageBody, primaryButton, recordHeader, recordTitle } from "../ui/components";
 import { deleteDialog } from "../ui/delete-dialog";
 import { type } from "../ui/theme";
 
 export function serviceDetail(id: ID, edit: (service: Service) => void, createOrder: (service: Service) => void) {
   const details = resource(() => api.getService(id));
   const deletion = deleteDialog("Удалить услугу?", "Существующие заказы сохранят условия этой услуги.", () => api.deleteService(id), details.load);
-  const actions = dialog(
-    UIText("Действия с услугой").style(type.card),
-    secondaryButton("Удалить услугу", "delete-service", () => {
+  const actions = actionMenu("Действия с услугой", "close-service-menu",
+    menuAction("Удалить услугу", "delete-service", assetIcon("lucide:trash-2"), () => {
       actions.hide();
       deletion.show();
     }, true),
-    secondaryButton("Закрыть", "close-service-menu", () => actions.hide()),
-  ).onDismiss(() => actions.hide());
+  );
 
   const screen = page("service-detail", pageBody(details.view((service) => [
     recordHeader(recordTitle(service.name), "service", () => edit(service), () => actions.show()),

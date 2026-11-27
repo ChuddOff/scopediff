@@ -32,11 +32,15 @@ const copy = {
 function chooseInput<T extends InputMethod>(name: string, title: string, options: MethodOption<T>[], descriptions: Record<T, string>,
   onChoose: (method: T) => void, subtitle: string, context?: string) {
   const choices = options.map((method) => UIButton(
-    iconTile(method.icon),
-    UIColumn(UIText(method.label).style(type.card), UIText(descriptions[method.id]).style({ ...type.small, color: colors.textMuted }))
-      .style({ flex: 1, minWidth: 0, gap: space.xs }),
-    arrow(),
-  ).style({ ...cardStyle, minHeight: 84, padding: space.lg, gap: space.md, $pressed: { backgroundColor: colors.ai } })
+    UIRow(iconTile(method.icon), arrow()).style({ justifyContent: "space-between", alignItems: "flex-start" }),
+    UIColumn(
+      UIText(method.label).style({ ...type.card, fontSize: 20, lineHeight: 26 }),
+      hint(descriptions[method.id]),
+    ).style({ gap: space.xs }),
+  ).style({
+    ...cardStyle, flexDirection: "column", alignItems: "stretch", padding: space.lg, gap: space.md,
+    $pressed: { backgroundColor: colors.ai },
+  })
     .named(`method-${method.id}`).onClick(() => onChoose(method.id)));
 
   return page(name, pageBody(

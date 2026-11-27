@@ -1,7 +1,7 @@
-import type { ID, Proposal, Service } from "../shared/types";
+import type { ID, Order, Proposal, Service } from "../shared/types";
 import { api } from "./api/client";
 import { isOpen } from "./proposals/model";
-import { aiInputScreen } from "./screens/ai-input";
+import { aiInputScreen, type AiMode } from "./screens/ai-input";
 import { changeMethods, creationMethods } from "./screens/creation-methods";
 import { orderDetail } from "./screens/order-detail";
 import { orderForm } from "./screens/order-form";
@@ -17,12 +17,12 @@ function servicePage(id: ID) {
 
 function orderPage(id: ID) {
   return orderDetail(id, (order) => Router.push(orderForm(order, null, () => Router.pop())),
-    (order, proposal) => openChanges(order.id, proposal), (proposalId) => Router.push(proposalPage(proposalId)));
+    (order) => openChanges(order), () => Router.push(proposalPage(id)));
 }
 
-function proposalPage(id: ID, versionId?: ID): UIScreen {
-  return proposalScreen(id, versionId, (proposal) => openChanges(proposal.orderId, proposal, true),
-    (historyId) => Router.push(proposalPage(id, historyId)));
+function proposalPage(orderId: ID, historical?: { proposalId: ID; versionId: ID }): UIScreen {
+  return proposalScreen(orderId, historical, (order, proposal, mode) => openChanges(order, proposal, true, mode),
+    (proposalId, versionId) => Router.push(proposalPage(orderId, { proposalId, versionId })));
 }
 
 export function openService(id: ID) { Router.push(servicePage(id)); }
@@ -62,22 +62,25 @@ export function newOrder(service?: Service) {
   }, service));
 }
 
-function openChanges(orderId: ID, proposal?: Proposal, returnToProposal = false) {
-  const title = proposal ? "Добавить замечания" : "Добавить правки";
+function openChanges(order: Order, proposal?: Proposal, returnToWorkspace = false, inputMode?: AiMode) {
+  const title = proposal ? "Изменить правки" : returnToWorkspace ? "Дополнить правки" : "Создать правки";
   let target = proposal;
-  Router.push(changeMethods(title, (mode) => Router.replace(aiInputScreen({
+  const input = (mode: AiMode) => aiInputScreen({
     entity: "changes", mode, title, button: "Обработать пожелания",
+    context: `Заказ: ${order.title}\n${order.agreements}`.slice(0, 12000),
     submit: (input) => target
       ? api.reviseProposal(target.id, { ...input, expectedVersionId: target.currentVersionId })
-      : api.createProposal(orderId, input),
-    onSaved: (result) => {
-      if (returnToProposal && result.proposal.id === proposal?.id) Router.pop();
-      else Router.replace(proposalPage(result.proposal.id));
+      : api.createProposal(order.id, input),
+    onSaved: () => {
+      if (returnToWorkspace) Router.pop();
+      else Router.replace(proposalPage(order.id));
     },
     onReview: async () => {
-      const { proposals } = await api.getOrder(orderId);
+      const { proposals } = await api.getOrder(order.id);
       target = proposals.find((item) => isOpen(item.status)) ?? proposal;
-      Router.push(orderPage(orderId));
+      Router.push(orderPage(order.id));
     },
-  }))));
+  });
+  if (inputMode) Router.push(input(inputMode));
+  else Router.push(changeMethods(title, (mode) => Router.replace(input(mode))));
 }

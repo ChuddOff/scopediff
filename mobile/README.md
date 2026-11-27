@@ -19,6 +19,7 @@ lecodes dev --web --entry dev-mock.ts     # отдельный вход с ло�
 
 ```sh
 lecodes test --entry dev-mock.ts
+lecodes test --entry tests/dictation.ts --dir tests/dictation
 lecodes test --entry tests/http-client.ts --dir tests/http
 npx --yes --package typescript@5.9.3 tsc --noEmit --strict
 ```
@@ -30,6 +31,8 @@ lecodes test --entry tests/http-wire.ts --dir tests/http-wire --wait-network --s
 ```
 
 Тестовый сервер слушает только `127.0.0.1:49335` и использует тестовые данные. Параметр `--settle 100` позволяет проверить состояние загрузки до задержанного ответа сервера. Формат сценариев описан в [CLAUDE.md](./CLAUDE.md).
+
+Контекстная диктовка использует `POST /api/v1/ai/enhance-description`. HTTP-клиент готов к подключению после согласования и реализации обработчика. Тест диктовки использует управляемое распознавание и локальную обработку, поэтому не требует микрофона.
 
 ## Подготовка конкурсного проекта LeCodes
 

@@ -37,6 +37,33 @@ export function exampleOrder(text: string, serviceId: OrderInput["serviceId"]) {
   return { input, changes };
 }
 
+function spokenChanges(text: string, previous: ProposalVersion) {
+  const positions = ["перв", "втор", "трет", "четв", "пят", "шест", "седьм", "восьм", "девят", "десят"];
+  const titleAt = (value: string) => {
+    const number = /^\d+$/.test(value) ? Number(value) : positions.findIndex((prefix) => value.toLowerCase().startsWith(prefix)) + 1;
+    return previous.items[number - 1]?.title;
+  };
+  return text.split(/\r?\n/).flatMap((line) => {
+    if (/^\s*(?:Убрать|Условия|Срок|Цена|Дополнительно):/i.test(line)) return [line];
+    return line.split(/[,;]\s*(?=(?:убери|удали|за|добавь)\s)/i).map((part) => {
+      const remove = part.trim().match(/^(?:убери|удали)\s+(\S+)\s+пункт[.!]?$/i);
+      const price = part.trim().match(/^за\s+(\S+)\s+(?:пункт\s+)?поставь\s+(.+?)[.!]?$/i);
+      if (remove) {
+        const title = titleAt(remove[1]);
+        if (title) return `Убрать: ${title}`;
+      }
+      if (price) {
+        const title = titleAt(price[1]);
+        const value = price[2].trim().toLowerCase();
+        const amount = value === "полторы тысячи" ? 1500 : parsePrice(value.replace(/\s*рублей$/, "").replace(/\s+/g, ""));
+        if (title && amount !== null && Number.isFinite(amount)) return `Цена: ${title} — ${amount}`;
+      }
+      const add = part.trim().match(/^добавь\s+(.+)$/i)?.[1];
+      return add ? `Добавить ${add}` : part;
+    });
+  });
+}
+
 export function exampleChanges(text: string, order: Order, approved: ProposalVersion[], previous?: ProposalVersion): ProposalContentInput {
   const normalize = (value: string) => value.trim().replace(/[.!?]+$/, "").replace(/\s+/g, " ").toLowerCase();
   const alreadyAgreed = new Set(order.agreements.split(/\n|[.!?](?:\s|$)/).map(normalize));
@@ -51,7 +78,8 @@ export function exampleChanges(text: string, order: Order, approved: ProposalVer
     comment: previous?.comment ?? null,
   };
 
-  for (const line of text.split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+  const lines = previous ? spokenChanges(text, previous) : text.split(/\r?\n/);
+  for (const line of lines.map((value) => value.trim()).filter(Boolean)) {
     const command = line.match(/^(Убрать|Условия|Срок|Цена):\s*(.+)$/i);
     if (command) {
       const value = command[2];

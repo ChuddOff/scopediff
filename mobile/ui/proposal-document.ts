@@ -1,4 +1,4 @@
-import type { ChangeItem, Order, ProposalStatus, ProposalVersion } from "../../shared/types";
+import type { ChangeItem, ProposalStatus, ProposalVersion } from "../../shared/types";
 import { categoryLabels, formatDate, formatMoney, priceSummary, proposalStatus } from "../proposals/model";
 import { card, hint, icon, wordmark } from "./components";
 import { colors, radius, space, type } from "./theme";
@@ -42,16 +42,13 @@ function documentItem(item: ChangeItem, index: number) {
 
 function line() { return UIBox().style({ height: 1, backgroundColor: colors.border }); }
 
-export function proposalDocument(order: Order, version: ProposalVersion) {
+export function proposalDocument(version: ProposalVersion) {
   const totals = priceSummary(version.items);
   return card(
     UIRow(wordmark(19), UIText(formatDate(version.createdAt)).style({ ...type.small, color: colors.textMuted }))
       .style({ justifyContent: "space-between", alignItems: "center", gap: space.sm }),
     line(),
-    UIColumn(
-      UIText(version.title).style({ fontSize: 25, lineHeight: 31, fontWeight: 700, letterSpacing: -0.5 }),
-      hint(`Заказ · ${order.title}`),
-    ).style({ gap: space.xs }),
+    UIText(version.title).style({ fontSize: 25, lineHeight: 31, fontWeight: 700, letterSpacing: -0.5 }),
     UIColumn(
       UIText("Перечень работ").style({ ...type.label, color: colors.textMuted }),
       version.items.flatMap((item, index) => index ? [line(), documentItem(item, index)] : [documentItem(item, index)]),

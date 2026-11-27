@@ -1,9 +1,13 @@
 import type { ApiError } from "../../shared/types";
 import { isConflict, isOutcomeUnknown } from "../api/client";
+import type { EnhanceDescriptionInput } from "../api/client";
 import { createHttpApi } from "../api/http";
 
 const base = "https://scope-diff.invalid/api/v1";
 const fixtureToken = "http-fixture-token";
+const dictation: EnhanceDescriptionInput = {
+  kind: "change_item", title: "Макет", currentText: "Основное описание.", dictation: "потом на телефоне", context: "Мобильный заказ",
+};
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -51,6 +55,11 @@ async function requestRoutes() {
       return response(201, { token: fixtureToken });
     }
     if (options.method === "GET") check(options.cache === "no-store", "GET must read fresh data");
+    if (path === "/ai/enhance-description") {
+      check(options.method === "POST" && options.headers?.["Content-Type"] === "application/json", "Expected JSON for dictation");
+      check(options.body === JSON.stringify(dictation), "Dictation fields did not reach the transport");
+      return response(200, { text: "Основное описание. Затем проверить на телефоне." });
+    }
     const status = statuses[`${options.method} ${path}`] ?? 200;
     if (status === 204) return response(204);
     if (["/orders", "/services", "/services/import", "/orders/o/proposals"].includes(path) &&
@@ -84,6 +93,7 @@ async function requestRoutes() {
   check((await api.getVersionPdf("v")).bytes()[0] === 37, "PDF response must stay binary");
   await api.getPublicProposal("share fixture");
   await api.respondPublic("share fixture", { action: "approve", expectedVersionId: "v" });
+  check((await api.enhanceDescription(dictation)).text.endsWith("на телефоне."), "Dictation response text was lost");
   const png = new File(0, "пример.png", 1024);
   await api.importServices({ text: "Одна услуга", files: [png] });
   await api.importOrder({ text: "Переписка", files: [png], serviceId: "s" });
@@ -128,6 +138,9 @@ async function failedRequests() {
   await rejects(() => api.listServices(), "UNAUTHORIZED", 401);
   result = response(404);
   await rejects(() => api.getOrder("missing"), "NOT_FOUND", 404);
+  await rejects(() => api.enhanceDescription(dictation), "SERVICE_UNAVAILABLE", 404);
+  result = response(200, { text: 123 });
+  await rejects(() => api.enhanceDescription(dictation), "INVALID_RESPONSE", 200);
   result = response(429, { error: { code: "RATE_LIMITED", message: "Повторите позже" } });
   await rejects(() => api.importServices({ text: "Услуга" }), "RATE_LIMITED", 429);
   result = response(502, { error: { code: "AI_FAILED", message: "Обработка недоступна" } });

@@ -12,8 +12,8 @@ const files = new Set([
   "screens/ai-input.ts", "screens/creation-methods.ts", "screens/order-detail.ts", "screens/order-form.ts",
   "screens/orders.ts", "screens/proposal-editor.ts", "screens/proposal-export.ts", "screens/proposal-history.ts",
   "screens/proposal.ts", "screens/service-detail.ts", "screens/service-form.ts", "screens/services.ts",
-  "ui/async.ts", "ui/components.ts", "ui/delete-dialog.ts", "ui/fields.ts", "ui/form-focus.ts", "ui/proposal-document.ts",
-  "ui/service-picker.ts", "ui/theme.ts",
+  "ui/async.ts", "ui/components.ts", "ui/delete-dialog.ts", "ui/dictation-field.ts", "ui/fields.ts", "ui/form-focus.ts",
+  "ui/proposal-document.ts", "ui/service-picker.ts", "ui/speech.ts", "ui/theme.ts",
   "assets/fonts/golos-text-400.ttf", "assets/fonts/golos-text-600.ttf", "assets/fonts/golos-text-700.ttf",
   "assets/fonts/golos-text-800.ttf", "fonts.lock.json", "FONT-NOTICES.md",
 ]);

@@ -2,11 +2,12 @@ const http = require('node:http');
 const assert = require('node:assert/strict');
 
 const service = { id: 'wire-service', name: 'Услуга HTTP', description: 'Тестовая услуга' };
-const order = {
+const initialOrder = {
   id: 'wire-order', serviceId: service.id, serviceSnapshot: service, title: 'Заказ HTTP',
-  agreements: 'Вёрстка первого экрана', completedWork: '', deadline: null, status: 'active', revision: 1,
+  agreements: 'Вёрстка первого экрана', completedWork: 'Первый вариант отправлен', deadline: '2026-12-04', status: 'active', revision: 1,
   createdAt: '2026-11-27T08:00:00Z', updatedAt: '2026-11-27T08:00:00Z',
 };
+let order = initialOrder;
 const fixtureToken = 'wire-fixture-session';
 const version = {
   id: 'wire-version-1', proposalId: 'wire-proposal', version: 1, author: 'freelancer', baseOrderRevision: 1,
@@ -42,6 +43,7 @@ http.createServer(async (req, res) => {
     if (route === 'POST /api/v1/session') {
       if (req.headers.authorization || (await readRequest(req)).toString() !== '{}') throw new Error('Invalid session request');
       proposal = undefined;
+      order = initialOrder;
       imports = 0;
       publishedReads = 0;
       return send(res, 201, { token: fixtureToken });
@@ -54,6 +56,12 @@ http.createServer(async (req, res) => {
         return send(res, 200, [service]);
       case 'GET /api/v1/services/wire-service': return send(res, 200, service);
       case 'GET /api/v1/orders/wire-order': return send(res, 200, { order, proposals: proposal ? [proposal] : [] });
+      case 'PATCH /api/v1/orders/wire-order': {
+        const input = JSON.parse((await readRequest(req)).toString());
+        assert.deepEqual(input, { title: 'Заказ HTTP', agreements: 'Уточнили описание', deadline: null });
+        order = { ...order, ...input, revision: order.revision + 1 };
+        return send(res, 200, order);
+      }
       case 'POST /api/v1/orders/import': {
         const form = await readForm(req);
         assert.deepEqual([...form.keys()], ['text', 'files', 'files', 'serviceId']);
