@@ -1,0 +1,20 @@
+{
+  "name": "Выбор и отвязка услуги, срок заказа",
+  "steps": [
+    { "tap": "new-order" },
+    { "tap": "method-manual", "expect": { "screen": "order-form", "text": "Без услуги" } },
+    { "tap": "select-service", "expect": { "text": "Выберите услугу" } },
+    { "tap": "choose-service-landing", "expect": { "text": "Дизайн лендинга" } },
+    { "type": "order-title", "text": "Сайт портфолио" },
+    { "type": "order-deadline", "text": "2026-12-08", "expect": { "value": { "target": "order-deadline", "equals": "2026-12-08" } } },
+    { "tap": "save-order", "expect": { "screen": "order-detail", "text": "Срок · 08.12.2026" } },
+    { "expect": { "text": "Дизайн лендинга" } },
+    { "tap": "edit-order" },
+    { "tap": "select-service" },
+    { "tap": "choose-no-service", "expect": { "text": "Без услуги" } },
+    { "tap": "clear-deadline", "expect": { "value": { "target": "order-deadline", "equals": "" } } },
+    { "tap": "save-order", "expect": { "screen": "order-detail", "notText": "Срок ·" } },
+    { "expect": { "notText": "Дизайн лендинга" } },
+    { "tap": "back", "expect": { "text": "4 в работе" } }
+  ]
+}

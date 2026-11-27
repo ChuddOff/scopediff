@@ -1,0 +1,50 @@
+{
+  "registry": "https://cdn.le.codes/fonts/v1",
+  "faces": {
+    "golos-text@400": {
+      "id": "golos-text",
+      "family": "Golos Text",
+      "weight": 400,
+      "italic": false,
+      "hash": "7c255885e99e",
+      "spdx": "OFL-1.1",
+      "path": "assets/fonts/golos-text-400.ttf"
+    },
+    "golos-text@600": {
+      "id": "golos-text",
+      "family": "Golos Text",
+      "weight": 600,
+      "italic": false,
+      "hash": "1d38fc3b3f03",
+      "spdx": "OFL-1.1",
+      "path": "assets/fonts/golos-text-600.ttf"
+    },
+    "golos-text@700": {
+      "id": "golos-text",
+      "family": "Golos Text",
+      "weight": 700,
+      "italic": false,
+      "hash": "8b9ab44deba0",
+      "spdx": "OFL-1.1",
+      "path": "assets/fonts/golos-text-700.ttf"
+    },
+    "golos-text@800": {
+      "id": "golos-text",
+      "family": "Golos Text",
+      "weight": 800,
+      "italic": false,
+      "hash": "90c301a248ab",
+      "spdx": "OFL-1.1",
+      "path": "assets/fonts/golos-text-800.ttf"
+    }
+  },
+  "families": {
+    "golos-text": {
+      "spdx": "OFL-1.1",
+      "title": "Golos Text",
+      "url": "https://fonts.google.com/specimen/Golos+Text",
+      "attribution": null,
+      "modifiedNotice": false
+    }
+  }
+}

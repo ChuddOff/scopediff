@@ -1,0 +1,7 @@
+{
+  "name": "ScopeDiff",
+  "plugins": {
+    "native-ui": "*",
+    "speech": "*"
+  }
+}
