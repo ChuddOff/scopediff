@@ -26,6 +26,7 @@ from app.db import Database
 from app.errors import SERVICE_UNAVAILABLE, VALIDATION_ERROR, ApiError, ApiException
 from app.models import orders, proposal_versions, proposals
 from app.proposals import ProposalVersion
+from app.public_links import public_api_base_url
 from app.sessions import CurrentSession
 
 router = APIRouter(tags=["PDF"])
@@ -82,11 +83,11 @@ class PdfLinks:
 
     @classmethod
     def from_environment(cls) -> "PdfLinks | None":
-        base_url = os.getenv("PUBLIC_API_BASE_URL", "").strip().rstrip("/")
+        base_url = public_api_base_url()
         key = os.getenv("PDF_SIGNING_KEY", "").strip().encode()
-        if not base_url or not key:
+        if not os.getenv("PUBLIC_API_BASE_URL", "").strip() or not key:
             return None
-        if len(key) < 32 or not re.fullmatch(r"https://(?:[a-z0-9.-]+|\[[a-f0-9:]+\])(?::[0-9]+)?/api/v1", base_url, re.I):
+        if len(key) < 32 or base_url is None:
             raise ValueError("Set PUBLIC_API_BASE_URL to the HTTPS API base and PDF_SIGNING_KEY to a random secret")
         return cls(base_url, key)
 

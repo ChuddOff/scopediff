@@ -48,7 +48,7 @@ def test_upgrade_existing_catalog_and_restart(database_schema):
     engine = create_database_engine()
     try:
         with engine.connect() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003_proposal_drafts"
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004_public_approval"
     finally:
         engine.dispose()
 

@@ -14,6 +14,7 @@ from app import services
 from app.db import Database
 from app.errors import SERVICE_UNAVAILABLE, VALIDATION_ERROR, ApiError, ApiException
 from app.models import open_proposal, orders, proposals
+from app.public_links import share_url
 from app.sessions import CurrentSession
 
 router = APIRouter(
@@ -150,7 +151,7 @@ def require_no_open_proposal(connection: Connection, order_id: UUID) -> None:
 
 
 def proposal_response(row: RowMapping) -> Proposal:
-    return Proposal.model_validate(dict(row, share_url=None))
+    return Proposal.model_validate(dict(row, share_url=share_url(row["share_token"])))
 
 
 def order_proposals(connection: Connection, order_id: UUID) -> list[Proposal]:

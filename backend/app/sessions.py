@@ -32,11 +32,13 @@ class SessionResponse(BaseModel):
     token: str
 
 
-class SessionRateLimiter:
-    def __init__(self, limit: int):
+class RateLimiter:
+    def __init__(self, limit: int, window: int, message: str):
         if limit <= 0:
-            raise ValueError("SESSION_RATE_LIMIT_PER_HOUR must be positive")
+            raise ValueError("Rate limit must be positive")
         self.limit = limit
+        self.window = window
+        self.message = message
         self._lock = Lock()
         self._attempts: dict[str, deque[float]] = defaultdict(deque)
         self._expirations: deque[tuple[float, str]] = deque()
@@ -56,11 +58,11 @@ class SessionRateLimiter:
                 raise ApiException(
                     429,
                     "RATE_LIMITED",
-                    "Слишком много попыток создать сессию. Попробуйте позже",
+                    self.message,
                     {"Retry-After": str(retry_after)},
                 )
 
-            expires_at = now + HOUR_SECONDS
+            expires_at = now + self.window
             attempts.append(expires_at)
             self._expirations.append((expires_at, client_ip))
 

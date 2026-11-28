@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>{{ document.title if document else "Ссылка недоступна" }} · scope.diff</title>
+  <style nonce="{{ nonce }}">
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f6f8; color: #111827; font: 16px/1.5 system-ui, sans-serif; }
+    header { padding: 18px; text-align: center; font-size: 20px; font-weight: 750; }
+    main { max-width: 740px; margin: 0 auto; padding: 0 16px 40px; overflow-wrap: anywhere; }
+    article, form { background: white; border-radius: 16px; padding: clamp(18px, 5vw, 36px); }
+    form, .actions { margin-top: 16px; }
+    h1, h2, h3 { line-height: 1.2; margin: 0 0 12px; }
+    h1 { font-size: clamp(26px, 5vw, 36px); }
+    h2 { font-size: 20px; }
+    h3 { font-size: 17px; }
+    p { margin: 0 0 12px; }
+    .meta { color: #4b5563; }
+    .status { display: inline-block; padding: 5px 10px; border-radius: 12px; background: #eeedff; color: #4238b9; font-weight: 600; }
+    .status.approved { color: #166534; background: #dcfce7; }
+    .status.countered, .status.rejected { color: #92400e; background: #fef3c7; }
+    .work, .section { border-top: 1px solid #e5e7eb; margin-top: 16px; padding-top: 16px; }
+    .description { white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    button { min-height: 44px; padding: 8px 14px; border: 0; background: #eeedff; color: #4238b9; border-radius: 12px; font: inherit; font-weight: 650; cursor: pointer; }
+    button.primary { background: #554ce0; color: white; }
+    button:disabled { opacity: .55; cursor: wait; }
+    label { display: block; margin-bottom: 12px; font-weight: 600; }
+    input, textarea { display: block; width: 100%; min-height: 44px; margin-top: 4px; padding: 8px; border: 1px solid #9ca3af; border-radius: 8px; color: inherit; background: white; font: inherit; }
+    textarea { resize: vertical; }
+    fieldset { min-width: 0; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; margin: 0 0 12px; }
+    #feedback { margin: 12px 0 0; color: #991b1b; }
+    [hidden] { display: none !important; }
+    :focus-visible { outline: 2px solid #635bff; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <header>scope.diff</header>
+  <main>
+    {% if not document %}
+    <article>
+      <h1>Ссылка недоступна</h1>
+      <p class="meta">Попросите исполнителя прислать действующую ссылку на предложение.</p>
+    </article>
+    {% else %}
+    {% set statuses = {
+      "pending": "Ожидает согласования", "editing": "Исполнитель готовит новую версию",
+      "countered": "Встречные условия отправлены", "approved": "Согласовано", "rejected": "Отклонено"
+    } %}
+    <article>
+      <p class="meta">{{ document.order_title }} · Версия {{ document.version }}</p>
+      <h1>{{ document.title }}</h1>
+      <p class="status {{ document.status }}">{{ statuses[document.status] }}</p>
+      <section class="section">
+        <h2>Работы и доплаты</h2>
+        {% set totals = namespace(known=0, unknown=0) %}
+        {% for item in document.items %}
+          {% if item.price is none %}
+            {% set totals.unknown = totals.unknown + 1 %}
+          {% else %}
+            {% set totals.known = totals.known + item.price %}
+          {% endif %}
+          <div class="work">
+            <h3>{{ item.title }}</h3>
+            {% if item.description %}<p class="description">{{ item.description }}</p>{% endif %}
+            <p>Доплата {{ item.price | money if item.price is not none else "не определена" }}</p>
+          </div>
+        {% else %}
+          <p class="meta">Работы по этому предложению отсутствуют.</p>
+        {% endfor %}
+        <div class="section">
+          {% if totals.unknown %}
+            {% if totals.unknown < document.items | length %}<p>Известная доплата · {{ totals.known | money }}</p>{% endif %}
+            <p>Итоговая доплата пока не определена.</p>
+          {% else %}
+            <p><strong>Итоговая доплата · {{ totals.known | money }}</strong></p>
+          {% endif %}
+        </div>
+      </section>
+      {% if document.deadline %}<p>Предлагаемый срок · <time datetime="{{ document.deadline }}">{{ document.deadline.strftime("%d.%m.%Y") }}</time></p>{% endif %}
+      {% if document.conditions %}<section class="section"><h2>Условия</h2><p class="description">{{ document.conditions }}</p></section>{% endif %}
+      {% if document.comment %}<section class="section"><h2>Комментарий</h2><p class="description">{{ document.comment }}</p></section>{% endif %}
+      {% if document.can_respond %}
+        <div class="actions">
+          <button type="button" class="primary" id="approve">Согласовать</button>
+          <button type="button" id="edit" aria-expanded="false" aria-controls="counter">Предложить изменения</button>
+        </div>
+        <p class="meta">Ответить может любой обладатель ссылки.</p>
+      {% endif %}
+      <p id="feedback" role="status" hidden></p>
+      <button type="button" id="refresh" hidden>Обновить документ</button>
+    </article>
+    {% if document.can_respond %}
+    <form id="counter" hidden>
+      <h2>Встречные условия</h2>
+      <div id="work-list"></div>
+      <p><button type="button" id="add-work">Добавить работу</button></p>
+      <label>Срок<input name="deadline" type="date" max="9999-12-31"></label>
+      <label>Условия<textarea name="conditions" maxlength="12000" rows="3"></textarea></label>
+      <label>Комментарий<textarea name="comment" maxlength="12000" rows="3"></textarea></label>
+      <div class="actions">
+        <button class="primary" type="submit">Отправить встречные условия</button>
+        <button type="button" id="cancel">Отмена</button>
+      </div>
+    </form>
+    <template id="work-row">
+      <fieldset>
+        <legend>Работа</legend>
+        <label>Название<input name="title" required maxlength="160"></label>
+        <label>Описание<textarea name="description" maxlength="12000" rows="2"></textarea></label>
+        <label>Доплата, ₽<input name="price" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="16" placeholder="Не определена"></label>
+        <button type="button" class="remove-work">Убрать работу</button>
+      </fieldset>
+    </template>
+    <script type="application/json" id="proposal-data">{{ document.model_dump(mode="json", by_alias=True) | tojson }}</script>
+    <script nonce="{{ nonce }}">
+      const proposal = JSON.parse(document.getElementById("proposal-data").textContent);
+      const approve = document.getElementById("approve");
+      const edit = document.getElementById("edit");
+      const form = document.getElementById("counter");
+      const rows = document.getElementById("work-list");
+      const template = document.getElementById("work-row");
+      const feedback = document.getElementById("feedback");
+      const refresh = document.getElementById("refresh");
+      let unavailable = false;
+
+      function addWork(item) {
+        const row = template.content.firstElementChild.cloneNode(true);
+        row.dataset.itemId = item?.id ?? "";
+        row.elements.title.value = item?.title ?? "";
+        row.elements.description.value = item?.description ?? "";
+        row.elements.price.value = item?.price ?? "";
+        row.querySelector(".remove-work").addEventListener("click", () => row.remove());
+        rows.append(row);
+        return row;
+      }
+
+      function showForm(visible) {
+        form.hidden = !visible;
+        approve.hidden = visible;
+        edit.hidden = visible;
+        edit.setAttribute("aria-expanded", String(visible));
+        if (visible) {
+          const heading = form.querySelector("h2");
+          heading.tabIndex = -1;
+          heading.focus();
+        } else {
+          edit.focus();
+        }
+      }
+
+      function showFeedback(message, reload = false) {
+        feedback.textContent = message;
+        feedback.hidden = !message;
+        refresh.hidden = !reload;
+        if (message) {
+          feedback.tabIndex = -1;
+          feedback.focus();
+        }
+      }
+
+      async function sendResponse(action, content) {
+        const controls = Array.from(document.querySelectorAll("#approve, #edit, #counter button, #counter input, #counter textarea"));
+        controls.forEach(control => { control.disabled = true; });
+        showFeedback("");
+        try {
+          const token = location.pathname.split("/").pop();
+          // Keep Origin available for verification while omitting the Referer entirely.
+          const response = await fetch("/api/v1/public/" + token + "/respond", {
+            method: "POST", mode: "same-origin", credentials: "omit", redirect: "error",
+            referrer: "", referrerPolicy: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, expectedVersionId: proposal.versionId, content }),
+          });
+          if (response.ok) {
+            location.reload();
+            return;
+          }
+          const error = await response.json().catch(() => null);
+          if (response.status === 404 || response.status === 409) {
+            unavailable = true;
+            approve.hidden = edit.hidden = form.hidden = true;
+            showFeedback(response.status === 404 ? "Ссылка недоступна." : "Предложение изменилось. Обновите документ, чтобы увидеть актуальные условия.", response.status === 409);
+          } else {
+            showFeedback(error?.error?.message ?? "Не удалось отправить ответ. Попробуйте ещё раз.");
+          }
+        } catch {
+          showFeedback("Не удалось подтвердить отправку ответа. Обновите документ и проверьте статус.", true);
+        } finally {
+          if (!unavailable) controls.forEach(control => { control.disabled = false; });
+        }
+      }
+
+      for (const item of proposal.items) addWork(item);
+      form.elements.deadline.value = proposal.deadline ?? "";
+      form.elements.conditions.value = proposal.conditions;
+      form.elements.comment.value = proposal.comment ?? "";
+      refresh.addEventListener("click", () => location.reload());
+      approve.addEventListener("click", () => sendResponse("approve"));
+      edit.addEventListener("click", () => showForm(true));
+      document.getElementById("cancel").addEventListener("click", () => showForm(false));
+      document.getElementById("add-work").addEventListener("click", () => addWork().elements.title.focus());
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const items = [];
+        for (const row of rows.querySelectorAll("fieldset")) {
+          const {title, description, price} = row.elements;
+          const amount = price.value === "" ? null : Number(price.value);
+          if (!title.value.trim() || (amount !== null && !Number.isSafeInteger(amount))) {
+            showFeedback("Укажите название каждой работы и целую доплату в рублях. Поле доплаты можно оставить пустым.");
+            return;
+          }
+          items.push({ id: row.dataset.itemId || null, title: title.value.trim(), description: description.value, price: amount });
+        }
+        sendResponse("counter", {
+          items, deadline: form.elements.deadline.value || null,
+          conditions: form.elements.conditions.value, comment: form.elements.comment.value || null,
+        });
+      });
+    </script>
+    {% endif %}
+    {% endif %}
+  </main>
+</body>
+</html>

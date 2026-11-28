@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from secrets import token_urlsafe
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -8,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic.alias_generators import to_camel
 from sqlalchemy import func, select
 from sqlalchemy.engine import Connection, Engine, RowMapping
+from sqlalchemy.sql.elements import ColumnElement
 from starlette.concurrency import run_in_threadpool
 
 from app import ai, orders
@@ -16,6 +18,7 @@ from app.db import Database
 from app.errors import SERVICE_UNAVAILABLE, VALIDATION_ERROR, ApiError, ApiException
 from app.models import orders as order_table
 from app.models import proposal_versions, proposals
+from app.public_links import public_api_base_url
 from app.sessions import CurrentSession, client_ip
 
 router = APIRouter(
@@ -91,6 +94,7 @@ class ProposalState:
     order: RowMapping
     proposal: orders.Proposal
     version: ProposalVersion
+    share_token: str | None = field(repr=False)
 
     def result(self) -> ProposalResult:
         return ProposalResult(proposal=self.proposal, version=self.version)
@@ -231,11 +235,19 @@ def get_proposal(proposal_id: UUID, database: Database, session_id: CurrentSessi
 
 
 def lock_proposal(connection: Connection, proposal_id: UUID, session_id: UUID) -> ProposalState:
+    return lock_matching_proposal(
+        connection, proposals.c.id == proposal_id, order_table.c.session_id == session_id,
+    )
+
+
+def lock_matching_proposal(
+    connection: Connection, match: ColumnElement[bool], *order_filters: ColumnElement[bool],
+) -> ProposalState:
     # All writers lock the parent order first, including order deletion and completion.
     order_query = (
-        select(*orders.public_columns)
+        select(*orders.public_columns, proposals.c.id.label("locked_proposal_id"))
         .join_from(order_table, proposals, proposals.c.order_id == order_table.c.id)
-        .where(proposals.c.id == proposal_id, order_table.c.session_id == session_id)
+        .where(match, *order_filters)
         .with_for_update(of=order_table)
     )
     order = connection.execute(order_query).mappings().one_or_none()
@@ -243,14 +255,16 @@ def lock_proposal(connection: Connection, proposal_id: UUID, session_id: UUID) -
         raise ApiException(404, "NOT_FOUND", "Предложение не найдено")
     # Read the proposal after locking the order, so a queued writer sees the latest state.
     proposal = connection.execute(
-        select(proposals).where(proposals.c.id == proposal_id).with_for_update()
+        select(proposals).where(proposals.c.id == order["locked_proposal_id"], match).with_for_update()
     ).mappings().one_or_none()
     if proposal is None:
         raise ApiException(404, "NOT_FOUND", "Предложение не найдено")
     version = connection.execute(
         select(proposal_versions).where(proposal_versions.c.id == proposal["current_version_id"])
     ).mappings().one()
-    return ProposalState(order, orders.proposal_response(proposal), ProposalVersion.model_validate(version))
+    return ProposalState(
+        order, orders.proposal_response(proposal), ProposalVersion.model_validate(version), proposal["share_token"],
+    )
 
 
 def require_version(state: ProposalState, expected_version_id: UUID) -> None:
@@ -375,18 +389,49 @@ async def revise_proposal(
 @router.post("/proposals/{proposal_id}/publish", responses=ACTION_ERRORS)
 def publish_proposal(
     proposal_id: UUID, payload: PublishProposal, database: Database, session_id: CurrentSession,
+    response: Response,
 ) -> ProposalResult:
     with database.begin() as connection:
         state = lock_proposal(connection, proposal_id, session_id)
         require_version(state, payload.expected_version_id)
+        link_changes = {}
         if payload.format == "link":
-            raise ApiException(503, "SERVICE_UNAVAILABLE", "Этот формат пока недоступен. Выберите текст или Markdown")
+            if public_api_base_url() is None:
+                raise ApiException(503, "SERVICE_UNAVAILABLE", "Интерактивные ссылки пока недоступны")
+            response.headers["Cache-Control"] = "no-store"
+            if state.share_token is None:
+                link_changes["share_token"] = token_urlsafe(32)
         if state.proposal.status == "pending" and state.proposal.published_version_id == state.version.id:
+            if link_changes:
+                return update_proposal_state(connection, state, state.version, **link_changes)
             return state.result()
         require_status(state, "draft")
         return update_proposal_state(
-            connection, state, state.version, status="pending", published_version_id=state.version.id,
+            connection, state, state.version, status="pending", published_version_id=state.version.id, **link_changes,
         )
+
+
+@router.post("/proposals/{proposal_id}/revoke-link", responses=ACTION_ERRORS)
+def revoke_link(
+    proposal_id: UUID, payload: VersionAction, database: Database, session_id: CurrentSession,
+) -> ProposalResult:
+    with database.begin() as connection:
+        state = lock_proposal(connection, proposal_id, session_id)
+        require_version(state, payload.expected_version_id)
+        if state.share_token is None:
+            return state.result()
+        return update_proposal_state(connection, state, state.version, share_token=None)
+
+
+def apply_approval(connection: Connection, state: ProposalState) -> ProposalResult:
+    require_order_revision(state, state.version.base_order_revision)
+    order_changes = {"revision": state.order["revision"] + 1}
+    if state.version.deadline is not None:
+        order_changes["deadline"] = state.version.deadline
+    return update_proposal_state(
+        connection, state, state.version, order_changes=order_changes,
+        status="approved", approved_version_id=state.version.id,
+    )
 
 
 @router.post("/proposals/{proposal_id}/approve", responses=ACTION_ERRORS)
@@ -399,14 +444,7 @@ def approve_proposal(
         if state.proposal.status == "approved" and state.proposal.approved_version_id == state.version.id:
             return state.result()
         require_status(state, "pending", "countered")
-        require_order_revision(state, state.version.base_order_revision)
-        order_changes = {"revision": state.order["revision"] + 1}
-        if state.version.deadline is not None:
-            order_changes["deadline"] = state.version.deadline
-        return update_proposal_state(
-            connection, state, state.version, order_changes=order_changes,
-            status="approved", approved_version_id=state.version.id,
-        )
+        return apply_approval(connection, state)
 
 
 @router.post("/proposals/{proposal_id}/reject", responses=ACTION_ERRORS)

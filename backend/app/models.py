@@ -72,9 +72,12 @@ proposals = Table(
     Column("current_version_id", Uuid, nullable=False),
     Column("published_version_id", Uuid),
     Column("approved_version_id", Uuid),
+    Column("share_token", String(43)),
     Column("created_at", DateTime(timezone=True), server_default=func.statement_timestamp(), nullable=False),
     Column("updated_at", DateTime(timezone=True), server_default=func.statement_timestamp(), nullable=False),
     CheckConstraint("status IN ('draft', 'pending', 'countered', 'approved', 'rejected')", name="ck_proposals_status"),
+    UniqueConstraint("share_token", name="uq_proposals_share_token"),
+    CheckConstraint("char_length(share_token) = 43", name="ck_proposals_share_token_length"),
 )
 
 open_proposal = proposals.c.status.in_(("draft", "pending", "countered"))

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import ai, ai_routes, orders, pdf, proposals, services, sessions
+from app import ai, ai_routes, orders, pdf, proposals, public_approval, services, sessions
 from app.db import Database, create_database_engine
 from app.errors import SERVICE_UNAVAILABLE, ApiException
 
@@ -22,7 +22,10 @@ class HealthStatus(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.session_rate_limiter = sessions.SessionRateLimiter(int(os.getenv("SESSION_RATE_LIMIT_PER_HOUR", "10")))
+    app.state.session_rate_limiter = sessions.RateLimiter(
+        int(os.getenv("SESSION_RATE_LIMIT_PER_HOUR", "10")), sessions.HOUR_SECONDS,
+        "Слишком много попыток создать сессию. Попробуйте позже",
+    )
     app.state.pdf_links = pdf.PdfLinks.from_environment()
     logging.getLogger("python_multipart").setLevel(logging.ERROR)
     engine = create_database_engine()
@@ -39,12 +42,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="ScopeDiff API", lifespan=lifespan)
+app.add_middleware(public_approval.PublicRequestMiddleware)
 app.include_router(sessions.router, prefix="/api/v1")
 app.include_router(ai_routes.router, prefix="/api/v1")
 app.include_router(services.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(proposals.router, prefix="/api/v1")
 app.include_router(pdf.router, prefix="/api/v1")
+app.include_router(public_approval.router)
 
 
 @app.exception_handler(ApiException)

@@ -58,7 +58,7 @@ Remove-Variable scopeDiffPasswordLine, scopeDiffPassword
 & .\.venv\Scripts\python.exe -m alembic current
 ```
 
-Без `DATABASE_URL` проверки с настоящим PostgreSQL пропускаются. После применения миграций ожидаемая ревизия Alembic — `0003_proposal_drafts (head)`. Чтобы обновить только образ API, выполните `docker compose --env-file .env --env-file .env.local build api`.
+Без `DATABASE_URL` проверки с настоящим PostgreSQL пропускаются. После применения миграций ожидаемая ревизия Alembic — `0004_public_approval (head)`. Чтобы обновить только образ API, выполните `docker compose --env-file .env --env-file .env.local build api`.
 
 Для остановки выполните `docker compose --env-file .env --env-file .env.local down`. Команда сохраняет именованный том `scopediff-stage0_db_data`.
 
@@ -205,7 +205,9 @@ curl.exe -H "Authorization: Bearer $scopeDiffToken" `
     "$proposalUrl/revise"
 ```
 
-Перед первым экспортом отправьте на `POST /publish` тело `{"expectedVersionId":"<текущий UUID>","format":"markdown"}` или укажите `"format":"text"`. Клиент формирует документ из `version` в ответе, включая номер и цены. Используйте `null` для неизвестной доплаты и `0` для бесплатной работы. Экспорт исключает `item.reason`, внутренний `comment` и текст переписки. Статус `pending` означает готовность к согласованию. Повтор публикации той же версии возвращает тот же результат. Поддержку `format: "link"` ведёт отдельная задача.
+Перед первым экспортом отправьте на `POST /publish` тело `{"expectedVersionId":"<текущий UUID>","format":"markdown"}` или укажите `"format":"text"`. Клиент формирует документ из `version` в ответе, включая номер и цены. Используйте `null` для неизвестной доплаты и `0` для бесплатной работы. Экспорт исключает `item.reason`, внутренний `comment` и текст переписки. Статус `pending` означает готовность к согласованию. Повтор публикации той же версии возвращает тот же результат.
+
+Для интерактивного согласования укажите `"format":"link"`. В ответе `proposal.shareUrl` будет публичный HTTPS-адрес страницы предложения. Обладатель ссылки может согласовать опубликованную версию или предложить встречные условия без сессии. Владелец отзывает доступ через `POST /proposals/{id}/revoke-link` с `expectedVersionId`. После публикации новой версии заказчик сможет продолжить по той же ссылке, пока владелец её не отозвал.
 
 После подтверждения заказчиком передайте на `POST /approve` тело `{"expectedVersionId":"<UUID из version.id ответа publish>"}`. Повтор того же запроса возвращает сохранённый результат. `deadline: null` сохраняет прежний срок. `GET /orders/{id}` возвращает исходные договорённости и принятые предложения, а следующий AI-анализ получает принятые версии в контексте.
 
@@ -217,7 +219,7 @@ curl.exe -H "Authorization: Bearer $scopeDiffToken" `
 
 Для прямой загрузки PDF используйте `GET /versions/{id}/pdf` с Bearer. Для внешнего браузера запросите `POST /versions/{id}/pdf-link` с Bearer и возьмите `url` из ответа. Если текущая версия черновая, вызовите `publish` с `format: "pdf"`, затем откройте полученный `url`. Ссылка действует десять минут.
 
-Задайте `PUBLIC_API_BASE_URL` как фактический HTTPS-адрес API с `/api/v1`. Для `PDF_SIGNING_KEY` используйте случайный секрет, например значение от `secrets.token_urlsafe(48)`. Задайте его в окружении Render или локальном файле окружения Compose. Параметры должны быть одинаковыми у всех процессов, обслуживающих один адрес. Сохраняйте `--no-access-log` при запуске Uvicorn, чтобы подписанные URL не попадали в журнал доступа.
+Задайте `PUBLIC_API_BASE_URL` как фактический HTTPS-адрес API с `/api/v1`. Его используют PDF и интерактивные ссылки. Для `PDF_SIGNING_KEY` используйте случайный секрет, например значение от `secrets.token_urlsafe(48)`. Задайте его в окружении Render или локальном файле окружения Compose. Параметры должны быть одинаковыми у всех процессов, обслуживающих один адрес. Сохраняйте `--no-access-log` при запуске Uvicorn. На прокси исключите пути `/share/{token}` и `/api/v1/public/{token}…` из журналов запросов или скрывайте в них токен. [Журналы HTTP на Render](https://render.com/docs/logging#http-request-logs)
 
 ## Миграция на Render
 
