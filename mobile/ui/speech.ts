@@ -21,7 +21,7 @@ export function speechCapture(
       onError("Распознавание речи недоступно. Введите текст вручную.");
       return;
     }
-    const results: string[] = [];
+    let result = "";
     let failed = false;
     active = speech;
     state.value = "starting";
@@ -33,18 +33,18 @@ export function speechCapture(
         : "Не удалось распознать речь. Введите текст вручную или повторите попытку.");
     };
     speech.addEventListener("result", ({ transcript, isFinal }) => {
-      if (active === speech && isFinal && transcript.trim()) results.push(transcript.trim());
+      if (active === speech && isFinal && transcript.trim()) result = transcript.trim();
     });
     speech.addEventListener("error", fail);
     speech.addEventListener("end", () => {
       if (active !== speech) return;
-      if (!failed && !results.length) fail("noSpeech");
+      if (!failed && !result) fail("noSpeech");
       active = null;
       state.value = "idle";
-      if (!failed) onDictation(results.join(" "));
+      if (!failed) onDictation(result);
     });
     try {
-      await speech.start({ language: "ru-RU", continuous: true, interimResults: false });
+      await speech.start({ language: "ru-RU", continuous: false, interimResults: true });
       if (active === speech && state.value === "starting") state.value = "recording";
       else if (active !== speech) speech.abort();
     } catch (error) {

@@ -1,6 +1,6 @@
 import type {
-  ApiError, ID, Order, OrderDetail, OrderImportResult, OrderSummary, Proposal, ProposalDetail, ProposalResult,
-  PublicProposal, PublicResponse, Service, SessionResponse, VersionAction,
+  ApiError, EnhanceDescriptionResult, ID, Order, OrderDetail, OrderImportResult, OrderSummary, PdfLink, Proposal,
+  ProposalDetail, ProposalResult, PublicProposal, PublicResponse, Service, SessionResponse, VersionAction,
 } from "../../shared/types";
 import { validateAiInput } from "./ai-input";
 import type { AiInput, ApiClient } from "./client";
@@ -11,6 +11,7 @@ export interface HttpApi extends ApiClient {
   listProposals(orderId: ID): Promise<Proposal[]>;
   revokeLink(id: ID, input: VersionAction): Promise<ProposalResult>;
   deleteProposal(id: ID): Promise<void>;
+  temporaryPdfUrl(versionId: ID): Promise<string>;
   getVersionPdf(versionId: ID): Promise<FetchResponse>;
   getPublicProposal(token: string): Promise<PublicProposal>;
   respondPublic(token: string, input: PublicResponse): Promise<PublicProposal>;
@@ -214,7 +215,7 @@ export function createHttpApi(configuredBaseUrl: string, dependencies: Dependenc
     async enhanceDescription(input) {
       const path = "/ai/enhance-description";
       try {
-        const response = await sendJson<{ text: unknown }>(path, { method: "POST", status: 200, json: input, analysis: true });
+        const response = await sendJson<EnhanceDescriptionResult>(path, { method: "POST", status: 200, json: input, analysis: true });
         if (typeof response.text !== "string" || !response.text.trim() || response.text.length > 12000) {
           throw unexpectedResponse(200, false);
         }
@@ -251,6 +252,10 @@ export function createHttpApi(configuredBaseUrl: string, dependencies: Dependenc
     rejectProposal: (id, input) => action<ProposalResult>(`${proposal(id)}/reject`, input),
     revokeLink: (id, input) => action<ProposalResult>(`${proposal(id)}/revoke-link`, input),
     deleteProposal: (id) => remove(proposal(id)),
+    async temporaryPdfUrl(versionId) {
+      const { url } = await action<PdfLink>(`/versions/${segment(versionId)}/pdf-link`, {});
+      return url;
+    },
     async getVersionPdf(versionId) {
       return send(`/versions/${segment(versionId)}/pdf`, { method: "GET", status: 200, accept: "application/pdf" }, await sessionToken());
     },

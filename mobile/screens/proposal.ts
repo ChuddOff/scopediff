@@ -58,9 +58,8 @@ export function proposalScreen(orderId: ID, historical: { proposalId: ID; versio
   const exports = dialog(
     UIText("Поделиться правками").style(type.card),
     errorNotice(action.error),
-    secondaryButton(api.demo ? "Интерактивная ссылка · нужен сервер" : "Интерактивная ссылка", "share-link", () => exportFormat("link")),
-    secondaryButton(api.temporaryPdfUrl ? "PDF" : "PDF · недоступен", "share-pdf", () => exportFormat("pdf")),
-    secondaryButton(() => action.pending.value ? "Готовим документ…" : "Markdown", "share-markdown", () => exportFormat("markdown")),
+    api.temporaryPdfUrl ? secondaryButton("PDF", "share-pdf", () => exportFormat("pdf")) : null,
+    secondaryButton(() => action.pending.value ? "Готовим документ…" : "Текст и Markdown", "share-markdown", () => exportFormat("markdown")),
     secondaryButton("Закрыть", "close-share", () => dismiss(exports)),
   ).onDismiss(() => dismiss(exports));
 

@@ -1,5 +1,5 @@
 import type {
-  ApiError, ID, Order, OrderDetail, OrderImportResult, OrderInput, OrderSummary,
+  ApiError, EnhanceDescriptionInput, EnhanceDescriptionResult, ID, Order, OrderDetail, OrderImportResult, OrderInput, OrderSummary,
   ProposalDetail, ProposalResult, PublishProposal, Service, ServiceInput, UpdateProposal, VersionAction,
 } from "../../shared/types";
 
@@ -7,13 +7,6 @@ export type OrderPatch = Partial<Pick<Order, "title" | "serviceId" | "agreements
 export type AiInput = { text?: string; files?: readonly File[] };
 export type OrderImportInput = AiInput & { serviceId?: ID };
 export type ReviseInput = AiInput & { expectedVersionId: ID };
-export type EnhanceDescriptionInput = {
-  kind: "service" | "order" | "change_item" | "conditions";
-  title: string;
-  currentText: string;
-  dictation: string;
-  context: string;
-};
 
 export interface ApiClient {
   readonly demo: boolean;
@@ -25,7 +18,7 @@ export interface ApiClient {
   updateService(id: ID, input: Partial<ServiceInput>): Promise<Service>;
   deleteService(id: ID): Promise<void>;
   importServices(input: AiInput): Promise<Service[]>;
-  enhanceDescription(input: EnhanceDescriptionInput): Promise<{ text: string }>;
+  enhanceDescription(input: EnhanceDescriptionInput): Promise<EnhanceDescriptionResult>;
   listOrders(): Promise<OrderSummary[]>;
   getOrder(id: ID): Promise<OrderDetail>;
   createOrder(input: OrderInput): Promise<Order>;
@@ -40,7 +33,6 @@ export interface ApiClient {
   approveProposal(id: ID, input: VersionAction): Promise<ProposalResult>;
   rejectProposal(id: ID, input: VersionAction): Promise<ProposalResult>;
   revokeLink?(id: ID, input: VersionAction): Promise<ProposalResult>;
-  // The future transport supplies a browser-openable URL. Its acquisition is outside the v1 contract.
   temporaryPdfUrl?(versionId: ID): Promise<string>;
   respondToDemoCounter?(id: ID, input: VersionAction): Promise<ProposalResult>;
 }

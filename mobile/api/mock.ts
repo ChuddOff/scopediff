@@ -81,17 +81,17 @@ function validDate(value: DateOnly | null): DateOnly | null {
   return value;
 }
 
-function serviceData(input: ServiceInput): ServiceInput {
-  return { name: validateText(input.name, "Название", 120, true), description: validateText(input.description, "Описание", 12000) };
+function serviceData(input: ServiceInput): Omit<Service, "id"> {
+  return { name: validateText(input.name, "Название", 120, true), description: validateText(input.description ?? "", "Описание", 12000) };
 }
 
-function orderData(input: OrderInput): OrderInput {
+function orderData(input: OrderInput): Required<OrderInput> {
   return {
     title: validateText(input.title, "Название", 160, true),
-    agreements: validateText(input.agreements, "Договорённости", 12000),
-    completedWork: validateText(input.completedWork, "Выполненные работы", 12000),
-    deadline: validDate(input.deadline),
-    serviceId: input.serviceId,
+    agreements: validateText(input.agreements ?? "", "Договорённости", 12000),
+    completedWork: validateText(input.completedWork ?? "", "Выполненные работы", 12000),
+    deadline: validDate(input.deadline ?? null),
+    serviceId: input.serviceId ?? null,
   };
 }
 
@@ -101,8 +101,9 @@ function snapshot(state: State, id: ID | null) {
 
 function insertOrder(state: State, input: OrderInput): Order {
   const now = new Date().toISOString();
+  const data = orderData(input);
   const order: Order = {
-    ...orderData(input), id: newId(), serviceSnapshot: snapshot(state, input.serviceId),
+    ...data, id: newId(), serviceSnapshot: snapshot(state, data.serviceId),
     status: "active", revision: 1, createdAt: now, updatedAt: now,
   };
   state.orders = [order, ...state.orders];

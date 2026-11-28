@@ -1,4 +1,5 @@
-import { api, errorMessage, type EnhanceDescriptionInput } from "../api/client";
+import type { EnhanceDescriptionInput } from "../../shared/types";
+import { api, errorMessage } from "../api/client";
 import { cardStyle, hint, icon } from "./components";
 import { fieldLabel, textArea } from "./fields";
 import { trackFormFocus } from "./form-focus";

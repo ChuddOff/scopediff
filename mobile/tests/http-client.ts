@@ -1,6 +1,5 @@
-import type { ApiError } from "../../shared/types";
+import type { ApiError, EnhanceDescriptionInput, PdfLink } from "../../shared/types";
 import { isConflict, isOutcomeUnknown } from "../api/client";
-import type { EnhanceDescriptionInput } from "../api/client";
 import { createHttpApi } from "../api/http";
 
 const base = "https://scope-diff.invalid/api/v1";
@@ -55,6 +54,10 @@ async function requestRoutes() {
       return response(201, { token: fixtureToken });
     }
     if (options.method === "GET") check(options.cache === "no-store", "GET must read fresh data");
+    if (path === "/versions/v%20pdf/pdf-link") {
+      check(options.method === "POST" && options.body === "{}", "Expected an empty JSON object for the PDF link");
+      return response(200, { url: "https://scope-diff.invalid/temporary.pdf", expiresAt: "2026-11-28T12:10:00Z" } satisfies PdfLink);
+    }
     if (path === "/ai/enhance-description") {
       check(options.method === "POST" && options.headers?.["Content-Type"] === "application/json", "Expected JSON for dictation");
       check(options.body === JSON.stringify(dictation), "Dictation fields did not reach the transport");
@@ -73,11 +76,11 @@ async function requestRoutes() {
   check(calls.filter(({ path }) => path === "/session").length === 1, "Concurrent requests opened duplicate sessions");
   check(await storage.get() === fixtureToken, "Session was not saved");
 
-  await api.createService({ name: "Сервис", description: "" });
+  await api.createService({ name: "Сервис" });
   await api.getService("s");
   await api.updateService("s", { description: "Описание" });
   await api.deleteService("s");
-  await api.createOrder({ serviceId: null, title: "Заказ", agreements: "", completedWork: "", deadline: null });
+  await api.createOrder({ title: "Заказ" });
   await api.getOrder("o");
   await api.updateOrder("o", { status: "completed" });
   await api.deleteOrder("o");
@@ -90,6 +93,7 @@ async function requestRoutes() {
   await api.rejectProposal("p", { expectedVersionId: "v" });
   await api.revokeLink("p", { expectedVersionId: "v" });
   await api.deleteProposal("p");
+  check(await api.temporaryPdfUrl("v pdf") === "https://scope-diff.invalid/temporary.pdf", "PDF link response lost its URL");
   check((await api.getVersionPdf("v")).bytes()[0] === 37, "PDF response must stay binary");
   await api.getPublicProposal("share fixture");
   await api.respondPublic("share fixture", { action: "approve", expectedVersionId: "v" });
@@ -105,7 +109,7 @@ async function requestRoutes() {
     "GET /health", "GET /services", "POST /services", "GET /services/s", "PATCH /services/s", "DELETE /services/s",
     "GET /orders", "POST /orders", "GET /orders/o", "PATCH /orders/o", "DELETE /orders/o", "GET /orders/o/proposals",
     "GET /proposals/p", "PATCH /proposals/p", "POST /proposals/p/publish", "POST /proposals/p/approve", "POST /proposals/p/reject",
-    "POST /proposals/p/revoke-link", "DELETE /proposals/p", "GET /versions/v/pdf", "GET /public/share%20fixture",
+    "POST /proposals/p/revoke-link", "DELETE /proposals/p", "POST /versions/v%20pdf/pdf-link", "GET /versions/v/pdf", "GET /public/share%20fixture",
     "POST /public/share%20fixture/respond", "POST /services/import", "POST /orders/import", "POST /orders/o/proposals", "POST /proposals/p/revise",
   ]) check(paths.includes(required), `Missing ${required}`);
   for (const { path, options } of calls.slice(-4)) {

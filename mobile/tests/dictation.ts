@@ -9,10 +9,15 @@ function fakeRecognizer(): Recognizer {
   return {
     addEventListener(channel, callback) { listeners[channel] = callback; },
     async start(options) {
-      if (options?.language !== "ru-RU") throw new Error("Expected Russian speech");
+      if (options?.language !== "ru-RU" || options.continuous !== false || options.interimResults !== true) {
+        throw new Error("Expected single Russian utterance with interim results");
+      }
     },
     stop() {
+      listeners.result?.({ transcript: "новый", isFinal: false, confidence: null });
       listeners.result?.({ transcript: "новый абзац", isFinal: true, confidence: null });
+      listeners.result?.({ transcript: "новый абзац", isFinal: true, confidence: null });
+      listeners.end?.();
       listeners.end?.();
     },
     abort() { listeners.end?.(); },
