@@ -1,0 +1,6 @@
+# Локальные постановки задач, отчёты и трекер
+/local-work/
+
+# Локальный Docker-стек
+/Dockerfile
+/compose.yaml
