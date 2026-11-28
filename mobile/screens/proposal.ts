@@ -51,13 +51,22 @@ export function proposalScreen(orderId: ID, historical: { proposalId: ID; versio
     if (!data || historyOnly) return;
     void action.run(() => prepareExport(data.order, data.proposal, data.version, format), (result) => {
       exports.hide();
-      Router.push(result.kind === "text" ? textExport(result.markdown, result.plain) : urlExport(result.url, format === "pdf"));
+      void document.load();
+      Router.push(result.kind === "text" ? textExport(result.markdown, result.plain) :
+        urlExport(result.url, format === "pdf", () => { void document.load(); }));
     }, reloadAfterFailure);
   }
 
   const exports = dialog(
     UIText("Поделиться правками").style(type.card),
     errorNotice(action.error),
+    UIColumn(() => {
+      const proposal = current()?.proposal;
+      if (api.demo || !proposal || (!proposal.shareUrl && proposal.status !== "draft" && proposal.status !== "pending")) {
+        return [];
+      }
+      return [secondaryButton("Интерактивная ссылка", "share-interactive-link", () => exportFormat("link"))];
+    }),
     api.temporaryPdfUrl ? secondaryButton("PDF", "share-pdf", () => exportFormat("pdf")) : null,
     secondaryButton(() => action.pending.value ? "Готовим документ…" : "Текст и Markdown", "share-markdown", () => exportFormat("markdown")),
     secondaryButton("Закрыть", "close-share", () => dismiss(exports)),

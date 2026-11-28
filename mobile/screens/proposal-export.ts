@@ -26,13 +26,16 @@ export function textExport(markdown: string, plain: string) {
   });
 }
 
-export function urlExport(url: string, pdf: boolean) {
+export function urlExport(url: string, pdf: boolean, afterBack: () => void) {
   return page("proposal-link", pageBody(
     pageTitle(pdf ? "PDF" : "Интерактивная ссылка"),
     hint(pdf ? "Документ откроется в браузере. Там его можно скачать или переслать." : "Передайте ссылку заказчику, чтобы он мог согласовать условия или предложить изменения."),
     !pdf ? secondaryButton("Скопировать ссылку", "copy-link", () => { clipboard.write(url); toast("Ссылка скопирована"); }) : null,
   ), {
-    onBack: () => Router.pop(),
+    onBack: () => {
+      Router.pop();
+      afterBack();
+    },
     action: primaryButton("Открыть в браузере", "open-export", () => openURL(url), assetIcon("lucide:external-link")),
   });
 }
